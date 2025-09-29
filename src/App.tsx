@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TopNavigation } from "@/components/Layout/TopNavigation";
 import { ProtectedRoute } from "@/components/Layout/ProtectedRoute";
 
+
 // Pages
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";

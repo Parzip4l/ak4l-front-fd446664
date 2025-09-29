@@ -1,167 +1,115 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-/**
- * Authentication context for managing user sessions and JWT tokens
- * Supports admin and regular user roles with persistent login state
- */
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 interface User {
-  id: string;
+  id: number;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  roles: string[];
+  permissions: string[];
 }
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  token: string | null;
-  isLoading: boolean;
+  fetchMe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+const API_URL = import.meta.env.VITE_API_URL;
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("token")
+  );
 
-  // Initialize auth state from localStorage on mount
-  useEffect(() => {
-    const savedToken = localStorage.getItem('ak4l_token');
-    const savedUser = localStorage.getItem('ak4l_user');
-    
-    if (savedToken && savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        setToken(savedToken);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('Error parsing saved user data:', error);
-        localStorage.removeItem('ak4l_token');
-        localStorage.removeItem('ak4l_user');
-      }
-    }
-    
-    setIsLoading(false);
-  }, []);
+  const isAdmin = !!user?.roles?.includes("admin");
 
-  /**
-   * Login function with dummy authentication
-   * In production, this would make API calls to validate credentials
-   */
   const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Dummy authentication logic
-      let userData: User;
-      let mockToken: string;
+      const response = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (email === 'admin@ak4l.com' && password === 'admin123') {
-        userData = {
-          id: 'admin_001',
-          name: 'Administrator AK4L',
-          email: 'admin@ak4l.com',
-          role: 'admin'
-        };
-        mockToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.admin.token';
-      } else if (email === 'user@ak4l.com' && password === 'user123') {
-        userData = {
-          id: 'user_001',
-          name: 'User AK4L',
-          email: 'user@ak4l.com',
-          role: 'user'
-        };
-        mockToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.user.token';
-      } else {
-        setIsLoading(false);
-        return false;
-      }
+      if (!response.ok) return false;
 
-      // Save to localStorage for persistence
-      localStorage.setItem('ak4l_token', mockToken);
-      localStorage.setItem('ak4l_user', JSON.stringify(userData));
-      
-      setToken(mockToken);
-      setUser(userData);
-      setIsLoading(false);
-      
+      const data = await response.json();
+      const jwt = data.token;
+
+      localStorage.setItem("token", jwt);
+      setToken(jwt);
+
+      await fetchMe(jwt); // langsung fetch user setelah login
       return true;
     } catch (error) {
-      console.error('Login error:', error);
-      setIsLoading(false);
+      console.error("Login error:", error);
       return false;
     }
   };
 
-  /**
-   * Logout function to clear all authentication data
-   */
+  const fetchMe = async (overrideToken?: string) => {
+    const activeToken = overrideToken || token;
+    if (!activeToken) return;
+
+    try {
+      const response = await fetch(`${API_URL}/me`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          Authorization: `Bearer ${activeToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Fetch me failed:", errorText);
+        throw new Error("Failed to fetch user data");
+      }
+
+      const data = await response.json();
+
+      setUser({
+        id: data.user?.id,
+        name: data.user?.name,
+        email: data.user?.email,
+        roles: data.roles || [],
+        permissions: data.permissions || [],
+      });
+    } catch (error) {
+      console.error("Fetch me error:", error);
+      logout();
+    }
+  };
+
+
   const logout = () => {
-    localStorage.removeItem('ak4l_token');
-    localStorage.removeItem('ak4l_user');
+    localStorage.removeItem("token");
     setToken(null);
     setUser(null);
   };
 
-  const value: AuthContextType = {
-    user,
-    isAdmin: user?.role === 'admin',
-    login,
-    logout,
-    token,
-    isLoading
-  };
+  useEffect(() => {
+    if (token) fetchMe();
+  }, [token]);
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{ user, token, isAdmin, login, logout, fetchMe }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-/**
- * Hook for making authenticated API calls with bearer token
- */
-export function useAuthenticatedApi() {
-  const { token } = useAuth();
-  
-  const apiCall = async (url: string, options: RequestInit = {}) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: token }),
-      ...options.headers,
-    };
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API call failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  };
-
-  return { apiCall, token };
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 }

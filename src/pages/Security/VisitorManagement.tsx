@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,9 +12,12 @@ import {
   Plus, 
   Calendar,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const API_URL = "http://127.0.0.1:8000/api/v1/visitor-requests";
 
 /**
  * Visitor Management System - Online visitor request form
@@ -32,16 +37,52 @@ export default function VisitorManagement() {
     additionalNotes: ""
   });
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      toast({
+        title: "Error",
+        description: "Token otentikasi tidak ditemukan. Mohon login ulang.",
+        variant: "destructive"
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Sesuaikan format data ke JSON raw yang diminta
+    const payload = {
+      visitor_name: formData.visitorName,
+      visitor_company: formData.company,
+      purpose: formData.purpose,
+      visit_date: `${formData.visitDate} ${formData.visitTime}:00`,
+      // Assuming host_id is a static value for now or obtained from elsewhere
+      // I'll use a dummy value for the example. You might need to change this.
+      host_id: 2 
+    };
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        throw new Error("Gagal mengirim pengajuan.");
+      }
+      
+      const responseData = await res.json();
       
       toast({
         title: "Pengajuan berhasil dikirim",
@@ -61,6 +102,7 @@ export default function VisitorManagement() {
       });
       
     } catch (error) {
+      console.error("Error submitting data:", error);
       toast({
         title: "Pengajuan gagal",
         description: "Terjadi kesalahan saat mengirim pengajuan",
@@ -72,10 +114,10 @@ export default function VisitorManagement() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-6 space-y-8 relative">
       <div>
-        <h1 className="text-3xl font-bold">Visitor Management System</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-3xl font-bold text-white">Visitor Management System</h1>
+        <p className="text-white mt-1">
           Ajukan kunjungan tamu secara online untuk mendapatkan persetujuan
         </p>
       </div>
@@ -189,7 +231,7 @@ export default function VisitorManagement() {
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Mengirim...
                     </>
                   ) : (

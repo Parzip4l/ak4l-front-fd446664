@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -10,62 +13,171 @@ import {
   Calendar,
   Target
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-/**
- * Safety Key Metrics - Public View
- * Display safety performance data in visual dashboard format
- * Accessible to all users for transparency
- */
+// URL API diambil dari environment variable
+const API_URL = "http://127.0.0.1:8000/api/v1";
+
 export default function SafetyMetrics() {
-  // Mock data - would come from API in production
-  const currentMonth = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const [safetyData, setSafetyData] = useState(null);
+  const [monthlyTrend, setMonthlyTrend] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Fetch data dari dua API
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error("Authentication token not available in localStorage.");
+        setLoading(false);
+        return;
+      }
+
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json",
+      };
+
+      try {
+        // Ambil data bulanan
+        const monthlyDataRes = await fetch(`${API_URL}/latest-by-month?year=${selectedMonth.split("-")[0]}&month=${selectedMonth.split("-")[1]}`, { headers });
+        const monthlyData = await monthlyDataRes.json();
+
+        // Ambil data trend 6 bulan
+        const trendDataRes = await fetch(`${API_URL}/safety-metrics/summary/monthly?year=${new Date().getFullYear()}`, { headers });
+        const trendData = await trendDataRes.json();
+
+        // Gabungkan data yang dibutuhkan
+        setSafetyData({
+          fatalities: monthlyData.fatality,
+          lostTimeInjuries: monthlyData.lost_time_injuries,
+          nearMisses: monthlyData.near_miss,
+          frequencyRate: parseFloat(monthlyData.fr),
+          severityRate: parseFloat(monthlyData.sr),
+          fatalAccidentRate: parseFloat(monthlyData.far),
+          lastUpdate: new Date(monthlyData.updated_at).toLocaleDateString('id-ID'),
+          targetFR: 1.0,
+          targetSR: 1.5,
+          targetFAR: 0,
+        });
+
+        // Filter data trend untuk 6 bulan terakhir
+        const currentMonthIndex = new Date().getMonth();
+        const sixMonthsAgoIndex = (currentMonthIndex - 5 + 12) % 12;
+        const trend = [];
+        for (let i = 0; i < 6; i++) {
+          const index = (sixMonthsAgoIndex + i) % 12;
+          trend.push(trendData[index]);
+        }
+        setMonthlyTrend(trend);
+        
+      } catch (error) {
+        console.error("Error fetching safety metrics:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [selectedMonth]);
   
-  const safetyData = {
-    fatalities: 0,
-    lostTimeInjuries: 2,
-    nearMisses: 15,
-    frequencyRate: 1.2,
-    severityRate: 0.8,
-    fatalAccidentRate: 0.0,
-    lastUpdate: "2024-01-15",
-    targetFR: 2.0,
-    targetSR: 1.5
-  };
-
-  const monthlyTrend = [
-    { month: 'Jul', fr: 1.8, sr: 1.2 },
-    { month: 'Aug', fr: 1.5, sr: 0.9 },
-    { month: 'Sep', fr: 1.3, sr: 0.8 },
-    { month: 'Okt', fr: 1.1, sr: 0.7 },
-    { month: 'Nov', fr: 1.0, sr: 0.6 },
-    { month: 'Des', fr: 1.2, sr: 0.8 }
-  ];
-
-  const getStatusColor = (value: number, target: number) => {
-    if (value <= target * 0.5) return "success";
-    if (value <= target * 0.8) return "warning";
+  const getStatusColor = (value, target) => {
+    if (value <= target) return "success";
+    if (value <= target * 1.5) return "warning";
     return "destructive";
   };
 
-  const getStatusIcon = (value: number, target: number) => {
-    if (value <= target * 0.5) return <CheckCircle className="h-4 w-4" />;
-    if (value <= target * 0.8) return <AlertTriangle className="h-4 w-4" />;
-    return <AlertTriangle className="h-4 w-4" />;
+  const getStatusIcon = (value, target) => {
+    if (value <= target) return <CheckCircle className="h-4 w-4 text-success" />;
+    if (value <= target * 1.5) return <AlertTriangle className="h-4 w-4 text-warning" />;
+    return <AlertTriangle className="h-4 w-4 text-destructive" />;
   };
 
+  const getTrendSummary = () => {
+    if (monthlyTrend.length < 2) {
+      return {
+        text: "Data tren belum cukup untuk analisis.",
+        color: "text-muted-foreground",
+        Icon: TrendingUp,
+      };
+    }
+    
+    // Check if both FR and SR are trending down
+    const isFRDown = monthlyTrend.slice(1).every((data, i) => data.fr <= monthlyTrend[i].fr);
+    const isSRDown = monthlyTrend.slice(1).every((data, i) => data.sr <= monthlyTrend[i].sr);
+    const isFRUp = monthlyTrend.slice(1).every((data, i) => data.fr >= monthlyTrend[i].fr);
+    const isSRUp = monthlyTrend.slice(1).every((data, i) => data.sr >= monthlyTrend[i].sr);
+
+    if (isFRDown && isSRDown) {
+      return {
+        text: "FR dan SR menunjukkan tren menurun dalam 6 bulan terakhir, menandakan peningkatan performa keselamatan kerja.",
+        color: "text-success",
+        Icon: TrendingDown,
+      };
+    } else if (isFRUp && isSRUp) {
+      return {
+        text: "FR dan SR menunjukkan tren meningkat dalam 6 bulan terakhir, menandakan penurunan performa keselamatan kerja.",
+        color: "text-destructive",
+        Icon: TrendingUp,
+      };
+    } else {
+      return {
+        text: "Tren FR dan SR bervariasi dalam 6 bulan terakhir. Perlu analisis lebih lanjut.",
+        color: "text-warning",
+        Icon: AlertTriangle,
+      };
+    }
+  };
+  
+  const trendSummary = getTrendSummary();
+  const IconComponent = trendSummary.Icon;
+
+  if (loading) {
+    return <div className="p-6">Loading...</div>;
+  }
+
+  if (!safetyData) {
+    return <div className="p-6">Data tidak tersedia.</div>;
+  }
+
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-6 space-y-8 relative">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Safety Key Metrics</h1>
-          <p className="text-muted-foreground mt-1">
-            Monitoring performa keselamatan kerja - {currentMonth}
+          <h1 className="text-3xl font-bold text-white">Safety Key Metrics</h1>
+          <p className="text-white mt-1">
+            Monitoring performa keselamatan kerja - {new Date(selectedMonth).toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
+        <div className="flex items-center space-x-3 mt-4 sm:mt-0">
+          {/* Month Picker */}
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Pilih bulan" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }).map((_, i) => {
+                const date = new Date();
+                date.setMonth(date.getMonth() - i);
+                const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+                const label = date.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+                return (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          <Calendar className="h-4 w-4 text-white" />
+          <span className="text-sm text-white">
             Update terakhir: {safetyData.lastUpdate}
           </span>
         </div>
@@ -143,7 +255,6 @@ export default function SafetyMetrics() {
 
       {/* Detailed Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Frequency & Severity Rates */}
         <Card className="surface-1">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -222,8 +333,8 @@ export default function SafetyMetrics() {
           <CardContent>
             <div className="space-y-4">
               {monthlyTrend.map((data, index) => (
-                <div key={data.month} className="flex items-center space-x-4">
-                  <div className="w-12 text-sm font-medium">{data.month}</div>
+                <div key={data.name} className="flex items-center space-x-4">
+                  <div className="w-12 text-sm font-medium">{data.name}</div>
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span>FR: {data.fr}</span>
@@ -240,12 +351,13 @@ export default function SafetyMetrics() {
             
             <div className="mt-6 p-4 bg-muted/50 rounded-lg">
               <div className="flex items-center space-x-2 mb-2">
-                <TrendingDown className="h-4 w-4 text-success" />
-                <span className="font-medium text-success">Tren Positif</span>
+                <IconComponent className={`h-4 w-4 ${trendSummary.color}`} />
+                <span className={`font-medium ${trendSummary.color}`}>
+                  {trendSummary.text.includes("menurun") ? "Tren Positif" : (trendSummary.text.includes("meningkat") ? "Tren Negatif" : "Tren Variasi")}
+                </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                FR dan SR menunjukkan tren menurun dalam 6 bulan terakhir, 
-                menandakan peningkatan performa keselamatan kerja.
+                {trendSummary.text}
               </p>
             </div>
           </CardContent>

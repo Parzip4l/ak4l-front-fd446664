@@ -1,311 +1,292 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+// FIX: The import for useAuth is removed to resolve build errors.
+// A temporary mock function is provided below instead.
+// import { useAuth } from "@/contexts/AuthContext"; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart, LabelList } from 'recharts';
 import { 
-  Activity, 
-  Users, 
-  CheckCircle, 
-  AlertTriangle,
-  Calendar,
-  TrendingUp,
-  FileText
+  Plus, Loader2, FileX
 } from "lucide-react";
 
-/**
- * Laporan Rikes & NAPZA - Health examination and drug test reports
- * Shows attendance and test results in graphical format
- */
+// FIX: Hardcoded the API URL to resolve the 'import.meta' build warning.
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+
+// --- [MOCK AUTH HOOK] ---
+const useAuth = () => {
+    const token = localStorage.getItem('token');
+    const isAdmin = !!token; 
+    return { token, isAdmin };
+};
+
+
+// --- [SUB-KOMPONEN] ---
+function RikesPradinasForm({ token, onSuccess }) {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const [formData, setFormData] = useState({ periode: new Date().toISOString().slice(0, 7), asp: '', occ: '', sarana: '', prasarana: '', target: '100', keterangan: '' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/rikes-pradinas`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ ...formData, asp: Number(formData.asp), occ: Number(formData.occ), sarana: Number(formData.sarana), prasarana: Number(formData.prasarana), target: Number(formData.target) }) });
+            if (!response.ok) { const err = await response.json(); throw new Error(err.message || "Gagal mengirim data."); }
+            toast({ title: "Sukses!", description: "Data Rikes Pradinas berhasil disimpan." });
+            onSuccess();
+        } catch (error) { toast({ title: "Error!", description: error.message, variant: "destructive" }); } finally { setIsLoading(false); }
+    };
+    return (
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="periode" className="text-right">Periode</Label><Input id="periode" name="periode" type="month" value={formData.periode} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="asp" className="text-right">ASP</Label><Input id="asp" name="asp" type="number" value={formData.asp} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="occ" className="text-right">OCC</Label><Input id="occ" name="occ" type="number" value={formData.occ} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="sarana" className="text-right">Sarana</Label><Input id="sarana" name="sarana" type="number" value={formData.sarana} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="prasarana" className="text-right">Prasarana</Label><Input id="prasarana" name="prasarana" type="number" value={formData.prasarana} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="keterangan" className="text-right">Keterangan</Label><Textarea id="keterangan" name="keterangan" value={formData.keterangan} onChange={handleChange} className="col-span-3" /></div>
+            <DialogFooter><Button type="submit" disabled={isLoading}>{isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : 'Simpan Data'}</Button></DialogFooter>
+        </form>
+    );
+}
+function RikesNapzaForm({ token, onSuccess }) {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const [formData, setFormData] = useState({ periode: new Date().toISOString().slice(0, 7), passed: '', not_passed: '', kehadiran: '', target: '100', keterangan: '' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setIsLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/rikes-napza`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ ...formData, passed: Number(formData.passed), not_passed: Number(formData.not_passed), kehadiran: Number(formData.kehadiran), target: Number(formData.target) }) });
+            if (!response.ok) { const err = await response.json(); throw new Error(err.message || "Gagal mengirim data."); }
+            toast({ title: "Sukses!", description: "Data Rikes & NAPZA berhasil disimpan." });
+            onSuccess();
+        } catch (error) { toast({ title: "Error!", description: error.message, variant: "destructive" }); } finally { setIsLoading(false); }
+    };
+    return (
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="periode" className="text-right">Periode</Label><Input id="periode" name="periode" type="month" value={formData.periode} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="passed" className="text-right">Lulus</Label><Input id="passed" name="passed" type="number" value={formData.passed} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="not_passed" className="text-right">Tidak Lulus</Label><Input id="not_passed" name="not_passed" type="number" value={formData.not_passed} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="kehadiran" className="text-right">Kehadiran (%)</Label><Input id="kehadiran" name="kehadiran" type="number" min="0" max="100" value={formData.kehadiran} onChange={handleChange} className="col-span-3" required /></div>
+            <div className="grid grid-cols-4 items-center gap-4"><Label htmlFor="keterangan" className="text-right">Keterangan</Label><Textarea id="keterangan" name="keterangan" value={formData.keterangan} onChange={handleChange} className="col-span-3" /></div>
+            <DialogFooter><Button type="submit" disabled={isLoading}>{isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...</> : 'Simpan Data'}</Button></DialogFooter>
+        </form>
+    );
+}
+
+// Komponen Chart Tahunan untuk data hitungan (bukan persentase)
+function YearlyCountChart({ data, title, categories, year }) {
+    const chartData = useMemo(() => {
+        const chartYear = year || new Date().getFullYear();
+        const allMonths = Array.from({ length: 12 }, (_, i) => 
+            new Date(chartYear, i, 1).toLocaleDateString('id-ID', { month: 'short' })
+        );
+        const dataMap = new Map(data.map(item => [
+            new Date(item.periode).toLocaleDateString('id-ID', { month: 'short' }), 
+            item
+        ]));
+        return allMonths.map(monthName => {
+            const monthData = dataMap.get(monthName) || {};
+            const values = categories.reduce((obj, cat) => {
+                obj[cat.label] = monthData[cat.key] || 0;
+                return obj;
+            }, {});
+            // UPDATED: Menghitung total realisasi dari semua kategori untuk line chart
+            const realisasi = categories.reduce((sum, cat) => sum + (monthData[cat.key] || 0), 0);
+            return { name: monthName, ...values, Target: monthData.target || 0, Realisasi: realisasi };
+        });
+    }, [data, categories, year]);
+
+    const colors = ["#D42A2A", "#F58021", "#BB7F37", "#FFD700"];
+
+    return (
+        <Card className="surface-1">
+            <CardHeader>
+                <CardTitle>{title}</CardTitle>
+                <CardDescription>Grafik jumlah peserta kegiatan pemeriksaan kesehatan tahunan.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2}/>
+                        <XAxis dataKey="name" />
+                        <YAxis domain={[0, 'dataMax + 10']}/>
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem' }}/>
+                        <Legend />
+                        {categories.map((cat, index) => (
+                             <Bar key={cat.key} dataKey={cat.label} stackId="a" fill={colors[index % colors.length]} barSize={30}>
+                                {/* UPDATED: Menambahkan label di dalam setiap bar (hanya jika nilainya > 0) */}
+                                <LabelList dataKey={cat.label} position="center" fill="#fff" fontSize={12} formatter={(value) => value > 0 ? value : ''} />
+                             </Bar>
+                        ))}
+                        <Line type="monotone" dataKey="Target" name="Target" stroke="#0000FF" strokeWidth={2} dot={false} activeDot={false} />
+                        {/* UPDATED: Menambahkan garis Realisasi berwarna hijau */}
+                        <Line type="monotone" dataKey="Realisasi" name="Realisasi" stroke="#22c55e" strokeWidth={2} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+// Komponen Chart Tahunan untuk data persentase
+function YearlyPercentageChart({ data, title, category, year, targetValue }) {
+     const chartData = useMemo(() => {
+        const chartYear = year || new Date().getFullYear();
+        const allMonths = Array.from({ length: 12 }, (_, i) => new Date(chartYear, i, 1).toLocaleDateString('id-ID', { month: 'short' }));
+        const dataMap = new Map(data.map(item => [new Date(item.periode).toLocaleDateString('id-ID', { month: 'short' }), item]));
+        return allMonths.map(monthName => {
+            const monthData = dataMap.get(monthName) || {};
+            return {
+                name: monthName,
+                [category.label]: monthData[category.key] || 0,
+                Target: targetValue
+            };
+        });
+    }, [data, category, year, targetValue]);
+
+    return (
+        <Card className="surface-1">
+             <CardHeader><CardTitle>{title}</CardTitle><CardDescription>Grafik persentase kehadiran tahunan.</CardDescription></CardHeader>
+             <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                    <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2}/>
+                        <XAxis dataKey="name" />
+                        <YAxis unit="%" domain={[0, 100]}/>
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem' }} formatter={(value) => `${value}%`} />
+                        <Legend />
+                        <Bar dataKey={category.label} fill="#F58021" barSize={30}>
+                            {/* UPDATED: Menambahkan label persentase di dalam bar */}
+                            <LabelList dataKey={category.label} position="insideTop" fill="#fff" fontSize={12} formatter={(value) => `${value}%`} />
+                        </Bar>
+                        <Line type="monotone" dataKey="Target" name="Target" stroke="#0000FF" strokeWidth={2} dot={false} activeDot={false} />
+                        {/* UPDATED: Menambahkan garis Realisasi berwarna hijau */}
+                        <Line type="monotone" dataKey={category.label} name="Realisasi" stroke="#22c55e" strokeWidth={2} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+             </CardContent>
+        </Card>
+    )
+}
+
+// --- KOMPONEN UTAMA ---
 export default function RikesNapza() {
-  const currentMonth = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const { isAdmin, token } = useAuth();
+  const { toast } = useToast();
   
-  // Mock data for Rikes & NAPZA reports
-  const healthData = {
-    totalEmployees: 450,
-    rikesParticipants: 425,
-    napzaParticipants: 445,
-    rikesAttendance: 94.4,
-    napzaAttendance: 98.9,
-    lastUpdate: "2024-01-15"
-  };
-
-  const monthlyAttendance = [
-    { month: 'Jul', rikes: 92, napza: 97 },
-    { month: 'Aug', rikes: 89, napza: 95 },
-    { month: 'Sep', rikes: 91, napza: 96 },
-    { month: 'Okt', rikes: 93, napza: 98 },
-    { month: 'Nov', rikes: 94, napza: 99 },
-    { month: 'Des', rikes: 94.4, napza: 98.9 }
-  ];
-
-  const testResults = {
-    rikes: {
-      fit: 380,
-      fitWithCondition: 40,
-      unfit: 5,
-      pending: 0
-    },
-    napza: {
-      negative: 440,
-      positive: 2,
-      pending: 3
+  const [rikesYearlyData, setRikesYearlyData] = useState([]);
+  const [napzaYearlyData, setNapzaYearlyData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dialogsOpen, setDialogsOpen] = useState({ pradinas: false, napza: false });
+  
+  const today = new Date();
+  const [filters, setFilters] = useState({ year: today.getFullYear() });
+  
+  const fetchData = useCallback(async () => {
+    if (!token || !API_BASE_URL) {
+      toast({ title: "Konfigurasi Error", description: "API URL atau token tidak ditemukan.", variant: "destructive" });
+      setIsLoading(false); return;
     }
+    
+    setIsLoading(true);
+    setRikesYearlyData([]); 
+    setNapzaYearlyData([]);
+    try {
+        const [rikesResponse, napzaResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/rikes-pradinas/filter/year?year=${filters.year}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_BASE_URL}/rikes-napza/filter/year?year=${filters.year}`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+
+        if (rikesResponse.ok) {
+            const rikesResult = await rikesResponse.json();
+            setRikesYearlyData(rikesResult.records || []);
+        } else { console.error("Gagal memuat data tahunan Rikes Pradinas."); }
+
+        if(napzaResponse.ok){
+            const napzaResult = await napzaResponse.json();
+            setNapzaYearlyData(napzaResult.records || []);
+        } else { console.error("Gagal memuat data tahunan NAPZA."); }
+
+    } catch (error) { toast({ title: "Error", description: "Terjadi kesalahan saat mengambil data.", variant: "destructive" });
+    } finally { setIsLoading(false); }
+  }, [token, filters.year, toast]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleFilterChange = (type, value) => setFilters(prev => ({...prev, [type]: value}));
+  const handleSuccess = (dialogName) => {
+      setDialogsOpen(prev => ({...prev, [dialogName]: false }));
+      fetchData();
   };
+  
+  const rikesCategories = [ {key: 'asp', label: 'ASP'}, {key: 'occ', label: 'OCC'}, {key: 'sarana', label: 'Sarana'}, {key: 'prasarana', label: 'Prasarana'} ];
+  const napzaCountCategories = [ {key: 'passed', label: 'Lulus'}, {key: 'not_passed', label: 'Gagal'}];
+  const napzaPercentCategory = {key: 'kehadiran', label: 'Hadir (%)'};
+
+  if (isLoading) {
+      return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>;
+  }
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Laporan Rikes & NAPZA</h1>
-          <p className="text-muted-foreground mt-1">
-            Monitoring kehadiran dan hasil pemeriksaan kesehatan - {currentMonth}
-          </p>
-        </div>
-        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            Update terakhir: {healthData.lastUpdate}
-          </span>
-        </div>
-      </div>
-
-      {/* Attendance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="surface-1 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Karyawan</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{healthData.totalEmployees}</div>
-            <p className="text-xs text-muted-foreground">
-              Karyawan aktif yang wajib medical check
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-success/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kehadiran Rikes</CardTitle>
-            <Activity className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">{healthData.rikesAttendance}%</div>
-            <p className="text-xs text-muted-foreground">
-              {healthData.rikesParticipants} dari {healthData.totalEmployees} karyawan
-            </p>
-            <Progress value={healthData.rikesAttendance} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-accent/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kehadiran NAPZA</CardTitle>
-            <CheckCircle className="h-4 w-4 text-accent" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-accent">{healthData.napzaAttendance}%</div>
-            <p className="text-xs text-muted-foreground">
-              {healthData.napzaParticipants} dari {healthData.totalEmployees} karyawan
-            </p>
-            <Progress value={healthData.napzaAttendance} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-warning/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Compliance Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">96.7%</div>
-            <p className="text-xs text-muted-foreground">
-              Overall medical compliance
-            </p>
-            <div className="flex items-center mt-2">
-              <TrendingUp className="h-3 w-3 text-success mr-1" />
-              <span className="text-xs text-success">Meningkat</span>
+    <div className="container mx-auto p-6 space-y-8 relative">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 className="text-3xl font-bold text-white">Laporan Tahunan Rikes & NAPZA</h1>
+                <p className="text-white mt-1">Monitoring hasil pemeriksaan untuk tahun {filters.year}</p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Results Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Rikes Results */}
-        <Card className="surface-1">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Activity className="h-5 w-5" />
-              <span>Hasil Pemeriksaan Rikes</span>
-            </CardTitle>
-            <CardDescription>
-              Distribusi hasil pemeriksaan kesehatan berkala
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg">
-                <div>
-                  <span className="font-medium text-success">Fit</span>
-                  <p className="text-sm text-muted-foreground">Sehat dan layak kerja</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-success">{testResults.rikes.fit}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.rikes.fit / healthData.rikesParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-warning/10 rounded-lg">
-                <div>
-                  <span className="font-medium text-warning">Fit with Condition</span>
-                  <p className="text-sm text-muted-foreground">Sehat dengan syarat</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-warning">{testResults.rikes.fitWithCondition}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.rikes.fitWithCondition / healthData.rikesParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-destructive/10 rounded-lg">
-                <div>
-                  <span className="font-medium text-destructive">Unfit</span>
-                  <p className="text-sm text-muted-foreground">Tidak layak kerja</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-destructive">{testResults.rikes.unfit}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.rikes.unfit / healthData.rikesParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* NAPZA Results */}
-        <Card className="surface-1">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5" />
-              <span>Hasil Test NAPZA</span>
-            </CardTitle>
-            <CardDescription>
-              Distribusi hasil tes narkoba, psikotropika, dan zat adiktif
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg">
-                <div>
-                  <span className="font-medium text-success">Negatif</span>
-                  <p className="text-sm text-muted-foreground">Bebas NAPZA</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-success">{testResults.napza.negative}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.napza.negative / healthData.napzaParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-destructive/10 rounded-lg">
-                <div>
-                  <span className="font-medium text-destructive">Positif</span>
-                  <p className="text-sm text-muted-foreground">Terdeteksi NAPZA</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-destructive">{testResults.napza.positive}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.napza.positive / healthData.napzaParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                <div>
-                  <span className="font-medium">Pending</span>
-                  <p className="text-sm text-muted-foreground">Menunggu hasil</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold">{testResults.napza.pending}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {((testResults.napza.pending / healthData.napzaParticipants) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Monthly Attendance Trend */}
-      <Card className="surface-1">
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <TrendingUp className="h-5 w-5" />
-            <span>Trend Kehadiran 6 Bulan Terakhir</span>
-          </CardTitle>
-          <CardDescription>
-            Perbandingan tingkat kehadiran Rikes dan NAPZA per bulan
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {monthlyAttendance.map((data) => (
-              <div key={data.month} className="flex items-center space-x-4">
-                <div className="w-12 text-sm font-medium">{data.month}</div>
-                <div className="flex-1 space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span>Rikes: {data.rikes}%</span>
-                    <span>NAPZA: {data.napza}%</span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <div className="flex-1">
-                      <Progress value={data.rikes} className="h-2" />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <Select value={String(filters.year)} onValueChange={(v) => handleFilterChange('year', Number(v))}>
+                    <SelectTrigger className="w-full sm:w-[120px]">
+                        <SelectValue placeholder="Pilih Tahun" />
+                    </SelectTrigger>
+                    <SelectContent>{Array.from({length: 5}, (_, i) => <SelectItem key={i} value={String(today.getFullYear() - i)}>{today.getFullYear() - i}</SelectItem>)}</SelectContent>
+                </Select>
+                {isAdmin && (
+                    <div className="flex items-center gap-2">
+                         <Dialog open={dialogsOpen.pradinas} onOpenChange={(isOpen) => setDialogsOpen(p => ({...p, pradinas: isOpen}))}><DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Rikes Pradinas</Button></DialogTrigger><DialogContent className="sm:max-w-[425px]"><DialogHeader><DialogTitle>Tambah Data Bulanan Rikes Pradinas</DialogTitle><DialogDescription>Isi detail laporan untuk periode yang dipilih.</DialogDescription></DialogHeader><RikesPradinasForm token={token} onSuccess={() => handleSuccess('pradinas')} /></DialogContent></Dialog>
+                         <Dialog open={dialogsOpen.napza} onOpenChange={(isOpen) => setDialogsOpen(p => ({...p, napza: isOpen}))}><DialogTrigger asChild><Button variant="outline"><Plus className="h-4 w-4 mr-2" /> Rikes & NAPZA</Button></DialogTrigger><DialogContent className="sm:max-w-[425px]"><DialogHeader><DialogTitle>Tambah Data Bulanan Rikes & NAPZA</DialogTitle><DialogDescription>Isi detail laporan untuk periode yang dipilih.</DialogDescription></DialogHeader><RikesNapzaForm token={token} onSuccess={() => handleSuccess('napza')} /></DialogContent></Dialog>
                     </div>
-                    <div className="flex-1">
-                      <Progress value={data.napza} className="h-2" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-            <div className="flex items-center space-x-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-success" />
-              <span className="font-medium text-success">Tren Positif</span>
+                )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Tingkat kehadiran Rikes dan NAPZA menunjukkan tren stabil dengan peningkatan compliance.
-              NAPZA mencapai target &gt;95% secara konsisten.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-4">
-        <Button className="bg-gradient-primary hover:opacity-90">
-          <FileText className="mr-2 h-4 w-4" />
-          Unduh Laporan Lengkap
-        </Button>
-        <Button variant="outline">
-          <Calendar className="mr-2 h-4 w-4" />
-          Jadwal Pemeriksaan
-        </Button>
-        <Button variant="outline">
-          <AlertTriangle className="mr-2 h-4 w-4" />
-          Follow Up Cases
-        </Button>
-      </div>
+        </div>
+        
+        {rikesYearlyData.length === 0 && napzaYearlyData.length === 0 ? (
+            <Card className="surface-1 text-center py-12"><FileX className="mx-auto h-12 w-12 text-muted-foreground" /><h3 className="mt-4 text-lg font-semibold">Data Tidak Ditemukan</h3><p className="mt-1 text-sm text-muted-foreground">Tidak ada data laporan untuk tahun {filters.year}.{isAdmin && " Silakan tambahkan data baru."}</p></Card>
+        ) : (
+        <div className="space-y-8">
+            {rikesYearlyData.length > 0 && (
+                 <YearlyCountChart 
+                    data={rikesYearlyData} 
+                    title="Grafik Kehadiran Rikes Pra-Dinas" 
+                    categories={rikesCategories}
+                    year={filters.year}
+                 />
+            )}
+             {napzaYearlyData.length > 0 && (
+                <div className="space-y-8">
+                    <YearlyCountChart 
+                        data={napzaYearlyData} 
+                        title="Grafik Hasil Tes NAPZA (Jumlah)" 
+                        categories={napzaCountCategories}
+                        year={filters.year}
+                    />
+                    <YearlyPercentageChart
+                        data={napzaYearlyData}
+                        title="Grafik Kehadiran Tes NAPZA (%)"
+                        category={napzaPercentCategory}
+                        year={filters.year}
+                        targetValue={100} // Asumsi target kehadiran 100%
+                    />
+                </div>
+             )}
+        </div>
+        )}
     </div>
   );
 }

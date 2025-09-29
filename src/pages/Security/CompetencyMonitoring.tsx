@@ -56,10 +56,10 @@ export default function CompetencyMonitoring() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-6 space-y-8 relative">
       <div>
-        <h1 className="text-3xl font-bold">Monitoring Kompetensi Personil Security</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-3xl font-bold text-white">Monitoring Kompetensi Personil Security</h1>
+        <p className="text-white mt-1">
           Matriks kompetensi dan dokumentasi sertifikat personel security
         </p>
       </div>

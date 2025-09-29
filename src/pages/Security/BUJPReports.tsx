@@ -153,18 +153,18 @@ export default function BUJPReports() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-6 space-y-8 relative">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Laporan BUJP</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-3xl font-bold text-white">Laporan BUJP</h1>
+          <p className="text-white mt-1">
             Upload dan monitor laporan Badan Usaha Jasa Pengamanan
           </p>
         </div>
         <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
+          <Calendar className="h-4 w-4 text-white" />
+          <span className="text-sm text-white">
             Upload berkala sesuai kontrak BUJP
           </span>
         </div>
