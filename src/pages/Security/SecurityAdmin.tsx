@@ -220,7 +220,7 @@ function SecurityAdminContent() {
     if (!token || !selectedDate.month || !selectedDate.year) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/security-metrics-v2-analytics?month=${selectedDate.month}&year=${selectedDate.year}`, {
+      const response = await fetch(`${API_URL}/security-metrics-v2-analytics?month=${selectedMonthPeriod}&year=${selectedDate.year}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

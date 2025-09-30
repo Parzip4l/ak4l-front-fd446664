@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import {
   Card,
@@ -8,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Activity,
   Shield,
@@ -18,22 +21,46 @@ import {
   TrendingUp,
   Calendar,
   Clock,
+  Loader2
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+
+// Helper to decode JWT token
+const decodeToken = (token) => {
+  try {
+    const payloadBase64 = token.split('.')[1];
+    const decodedJson = atob(payloadBase64);
+    return JSON.parse(decodedJson);
+  } catch (error) {
+    console.error("Failed to decode token:", error);
+    return null;
+  }
+};
 
 export default function Dashboard() {
-  const { user, isAdmin, token, logout } = useAuth();
+  // Local state to manage auth info instead of context
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
-  const [safetyMetrics, setSafetyMetrics] = useState<any>({
+  const [safetyMetrics, setSafetyMetrics] = useState({
     fatalities: 0,
     lostTime: 0,
     frequency: 0,
     severity: 0,
     lastUpdate: "-",
   });
+  
+  const [competencyAnalytics, setCompetencyAnalytics] = useState(null);
+  const [pendingReports, setPendingReports] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const logout = () => {
+      localStorage.removeItem('token');
+      window.location.reload(); // Simple logout mechanism
+  };
 
-  // Security & pending reports masih mock
+  // Security metrics are still mock data
   const securityMetrics = {
     criminalCases: 1,
     bombThreats: 0,
@@ -41,181 +68,193 @@ export default function Dashboard() {
     lastUpdate: "2024-01-15",
   };
 
-  const pendingReports = [
-    { type: "Medical Onsite", count: 3, urgent: 1 },
-    { type: "BUJP", count: 2, urgent: 0 },
-    { type: "Rikes & NAPZA", count: 1, urgent: 0 },
-  ];
+  // Set user info from token on initial load
+  useEffect(() => {
+    if (token) {
+      const decoded = decodeToken(token);
+      if (decoded) {
+        setUser(decoded.user); 
+        setIsAdmin(decoded.roles && decoded.roles.includes('admin'));
+      }
+    }
+  }, [token]);
 
+  // Fetch all dashboard data from API
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      
+      const baseUrl = "http://127.0.0.1:8000";
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+
+      try {
+        const [safetyRes, competencyRes, pendingReportsRes] = await Promise.all([
+           fetch(
+            `${baseUrl}/api/v1/latest-by-month?year=${year}&month=${month}`,
+            { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
+          ),
+          fetch(
+            `${baseUrl}/api/v1/personnels/analytics`,
+            { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
+          ),
+          fetch(
+            `${baseUrl}/api/v1/reports/pending`,
+            { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
+          )
+        ]);
+        
+        if (safetyRes.status === 401 || competencyRes.status === 401 || pendingReportsRes.status === 401) {
+            logout(); // Logout if token is invalid
+            return;
+        }
+
+        if (safetyRes.ok) {
+            const safetyData = await safetyRes.json();
+            setSafetyMetrics({
+              fatalities: safetyData.fatality,
+              lostTime: safetyData.lost_time_injuries,
+              frequency: parseFloat(safetyData.fr),
+              severity: parseFloat(safetyData.sr),
+              lastUpdate: safetyData.updated_at
+                ? new Date(safetyData.updated_at).toLocaleDateString("id-ID")
+                : "-",
+            });
+        } else {
+            console.error("Gagal mengambil data safety metrics");
+        }
+        
+        if(competencyRes.ok){
+            const competencyData = await competencyRes.json();
+            setCompetencyAnalytics(competencyData);
+        } else {
+            console.error("Gagal mengambil data kompetensi");
+        }
+        
+        if (pendingReportsRes.ok) {
+            const pendingData = await pendingReportsRes.json();
+            setPendingReports(pendingData);
+        } else {
+            console.error("Gagal mengambil data laporan tertunda");
+        }
+
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [token]);
+  
   const quickActions = [
     {
       title: "Safety Metrics",
       description: "Lihat dan kelola data keselamatan",
       href: isAdmin ? "/qshe/safety-admin" : "/qshe/safety-metrics",
       icon: Activity,
-      color: "bg-success/10 text-success",
+      color: "bg-green-100 text-green-700",
     },
     {
       title: "Security Metrics",
       description: "Monitor data keamanan",
       href: isAdmin ? "/security/security-admin" : "/security/security-metrics",
       icon: Shield,
-      color: "bg-primary/10 text-primary",
+      color: "bg-blue-100 text-blue-700",
     },
     {
       title: "Visitor Management",
       description: "Kelola kunjungan tamu",
       href: isAdmin ? "/security/vms-admin" : "/security/vms",
       icon: Users,
-      color: "bg-accent/10 text-accent",
+      color: "bg-purple-100 text-purple-700",
     },
     {
       title: "Laporan",
       description: "Akses semua laporan",
       href: "/reports",
       icon: FileText,
-      color: "bg-warning/10 text-warning",
+      color: "bg-yellow-100 text-yellow-700",
     },
   ];
 
-  // Fetch data safety metrics dari API
-  useEffect(() => {
-    const fetchSafetyData = async () => {
-      if (!token) return;
-
-      try {
-        const baseUrl =
-          import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, "0"); // 01 - 12
-
-        const res = await fetch(
-          `${baseUrl}/api/v1/latest-by-month?year=${year}&month=${month}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error("Fetch safety metrics failed:", errorText);
-          throw new Error("Failed to fetch safety metrics");
-        }
-
-        const data = await res.json();
-
-        setSafetyMetrics({
-          fatalities: data.fatality,
-          lostTime: data.lost_time_injuries,
-          frequency: parseFloat(data.fr),
-          severity: parseFloat(data.sr),
-          lastUpdate: data.updated_at
-            ? new Date(data.updated_at).toLocaleDateString("id-ID")
-            : "-",
-        });
-      } catch (err) {
-        console.error("Error fetching safety metrics:", err);
-        logout(); // kalau token invalid, logout user
-      }
-    };
-
-    fetchSafetyData();
-  }, [token, logout]);
-
   return (
-    <div className="container mx-auto p-6 space-y-8 relative">
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 relative">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-white mt-1">
-            Selamat datang, {user?.name}
-          </p>
         </div>
         <div className="flex items-center space-x-2 mt-4 sm:mt-0 text-white">
-          <Clock className="h-4 w-4 text-mutwhiteed-foreground" />
-          <span className="text-sm text-white-foreground">
-            Terakhir diperbarui: {new Date().toLocaleDateString("id-ID")}
+          <Clock className="h-4 w-4" />
+          <span className="text-sm">
+             {new Date().toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </span>
         </div>
       </div>
-
-      {/* Key Metrics Overview */}
+      
+       {/* Key Metrics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="surface-1 border-success/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Safety Status</CardTitle>
-            <Activity className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">Good</div>
-            <p className="text-xs text-muted-foreground">
-              {safetyMetrics.fatalities} fatalities, {safetyMetrics.lostTime} LTI bulan ini
-            </p>
-            <div className="flex items-center mt-2">
-              <TrendingUp className="h-3 w-3 text-success mr-1" />
-              <span className="text-xs text-success">FR: {safetyMetrics.frequency}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Security Status</CardTitle>
-            <Shield className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">Secure</div>
-            <p className="text-xs text-muted-foreground">
-              {securityMetrics.criminalCases} incident bulan ini
-            </p>
-            <div className="flex items-center mt-2">
-              <CheckCircle className="h-3 w-3 text-success mr-1" />
-              <span className="text-xs text-success">{securityMetrics.visits} kunjungan</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-warning/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Reports</CardTitle>
-            <FileText className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">
-              {pendingReports.reduce((acc, item) => acc + item.count, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {pendingReports.reduce((acc, item) => acc + item.urgent, 0)} butuh perhatian
-            </p>
-            <div className="flex items-center mt-2">
-              <AlertTriangle className="h-3 w-3 text-warning mr-1" />
-              <span className="text-xs text-warning">Segera tindak lanjut</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="surface-1 border-accent/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">System Health</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">Optimal</div>
-            <p className="text-xs text-muted-foreground">Semua sistem berjalan normal</p>
-            <div className="flex items-center mt-2">
-              <div className="w-2 h-2 bg-success rounded-full mr-2"></div>
-              <span className="text-xs text-success">Online</span>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-green-200">
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Safety Status</CardTitle>
+                <Activity className="h-4 w-4 text-green-600" />
+             </CardHeader>
+             <CardContent>
+                <div className="text-2xl font-bold text-green-600">Good</div>
+                <p className="text-xs text-muted-foreground">
+                   {safetyMetrics.fatalities} fatalities, {safetyMetrics.lostTime} LTI bulan ini
+                </p>
+             </CardContent>
+          </Card>
+          <Card className="border-blue-200">
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Security Status</CardTitle>
+                <Shield className="h-4 w-4 text-blue-600" />
+             </CardHeader>
+             <CardContent>
+                <div className="text-2xl font-bold text-green-600">Secure</div>
+                <p className="text-xs text-muted-foreground">
+                   {securityMetrics.criminalCases} incident bulan ini
+                </p>
+             </CardContent>
+          </Card>
+           <Card className="border-yellow-200">
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Reports</CardTitle>
+                <FileText className="h-4 w-4 text-yellow-600" />
+             </CardHeader>
+             <CardContent>
+                 {isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> :
+                    <>
+                        <div className="text-2xl font-bold text-yellow-600">
+                           {pendingReports.reduce((acc, item) => acc + item.count, 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                           {pendingReports.reduce((acc, item) => acc + item.urgent, 0)} butuh perhatian
+                        </p>
+                    </>
+                 }
+             </CardContent>
+          </Card>
+           <Card className="border-purple-200">
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Personel</CardTitle>
+                <Users className="h-4 w-4 text-purple-600" />
+             </CardHeader>
+             <CardContent>
+                {isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold text-purple-600">{competencyAnalytics?.total_personnel || 0}</div>}
+                <p className="text-xs text-muted-foreground">
+                   Personel Security Aktif
+                </p>
+             </CardContent>
+          </Card>
       </div>
 
       {/* Quick Actions */}
@@ -224,15 +263,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickActions.map((action) => (
             <Link key={action.title} to={action.href}>
-              <Card className="surface-1 hover:surface-2 transition-all duration-200 hover:scale-105 cursor-pointer group">
-                <CardContent className="p-6">
-                  <div
-                    className={`w-12 h-12 rounded-lg ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-                  >
+              <Card className="hover:shadow-lg transition-shadow duration-200 hover:-translate-y-1 cursor-pointer group">
+                <CardContent className="p-6 flex items-center space-x-4">
+                  <div className={`w-12 h-12 rounded-lg ${action.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
                     <action.icon className="h-6 w-6" />
                   </div>
-                  <h3 className="font-semibold mb-2">{action.title}</h3>
-                  <p className="text-sm text-muted-foreground">{action.description}</p>
+                   <div>
+                      <h3 className="font-semibold">{action.title}</h3>
+                      <p className="text-sm text-muted-foreground">{action.description}</p>
+                   </div>
                 </CardContent>
               </Card>
             </Link>
@@ -240,80 +279,93 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Activity & Pending Items */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pending Reports Detail */}
-        <Card className="surface-1">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <FileText className="h-5 w-5" />
-              <span>Laporan Tertunda</span>
-            </CardTitle>
-            <CardDescription>Laporan yang memerlukan tindak lanjut</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {pendingReports.map((report) => (
-              <div
-                key={report.type}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-              >
-                <div>
-                  <p className="font-medium">{report.type}</p>
-                  <p className="text-sm text-muted-foreground">{report.count} laporan pending</p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {report.urgent > 0 && (
-                    <Badge variant="destructive" className="text-xs">
-                      {report.urgent} urgent
-                    </Badge>
-                  )}
-                  <Badge variant="secondary">{report.count}</Badge>
-                </div>
+      {/* Competency & Pending Items */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+           <CardHeader>
+             <CardTitle>Ringkasan Kompetensi Keahlian</CardTitle>
+             <CardDescription>Distribusi sertifikasi personel untuk setiap keahlian.</CardDescription>
+           </CardHeader>
+           <CardContent>
+            {isLoading ? <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+              <div className="space-y-4">
+                {competencyAnalytics?.skills_summary.map(skill => {
+                  const total = skill.certified + skill.not_certified;
+                  const percentage = total > 0 ? (skill.certified / total) * 100 : 0;
+                  return (
+                    <div key={skill.skill_name}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm font-medium">{skill.skill_name} <Badge variant="outline" className="ml-2">{skill.skill_category}</Badge></span>
+                        <span className="text-sm text-muted-foreground">{skill.certified} / {total} Personel</span>
+                      </div>
+                      <Progress value={percentage} />
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-            <Button className="w-full mt-4" variant="outline" asChild>
-              <Link to="/reports">Lihat Semua Laporan</Link>
-            </Button>
-          </CardContent>
+            )}
+           </CardContent>
         </Card>
-
-        {/* System Information */}
-        <Card className="surface-1">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5" />
-              <span>Informasi Sistem</span>
-            </CardTitle>
-            <CardDescription>Status dan informasi penting</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg">
-                <span className="text-sm font-medium">Last Safety Update</span>
-                <span className="text-sm text-muted-foreground">{safetyMetrics.lastUpdate}</span>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg">
-                <span className="text-sm font-medium">Last Security Update</span>
-                <span className="text-sm text-muted-foreground">{securityMetrics.lastUpdate}</span>
-              </div>
-
-              <div className="flex justify-between items-center p-3 bg-accent/10 rounded-lg">
-                <span className="text-sm font-medium">User Role</span>
-                <Badge variant={isAdmin ? "default" : "secondary"}>
-                  {isAdmin ? "Administrator" : "Standard User"}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t">
-              <p className="text-xs text-muted-foreground text-center">
-                AK4L Dashboard v1.0 • Developed with ❤️
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        <span>Sertifikasi Segera Kedaluwarsa</span>
+                    </CardTitle>
+                    <CardDescription>Sertifikasi yang perlu segera diperbarui.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? <div className="flex justify-center items-center py-5"><Loader2 className="h-6 w-6 animate-spin"/></div> : (
+                        <div className="space-y-3">
+                            {competencyAnalytics?.expiring_soon.length > 0 ? (
+                                competencyAnalytics.expiring_soon.map((item, index) => (
+                                    <div key={index} className="flex justify-between items-center text-sm p-2 bg-red-50 rounded-md">
+                                        <div>
+                                            <p className="font-semibold">{item.personnel}</p>
+                                            <p className="text-xs text-muted-foreground">{item.skill}</p>
+                                        </div>
+                                        <Badge variant="destructive">{new Date(item.expiry).toLocaleDateString('id-ID')}</Badge>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">Tidak ada sertifikasi yang akan kedaluwarsa.</p>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+             <Card>
+               <CardHeader>
+                 <CardTitle className="flex items-center space-x-2">
+                   <FileText className="h-5 w-5" />
+                   <span>Laporan Tertunda</span>
+                 </CardTitle>
+               </CardHeader>
+               <CardContent className="space-y-3">
+                 {isLoading ? <div className="flex justify-center items-center py-5"><Loader2 className="h-6 w-6 animate-spin"/></div> : (
+                    pendingReports.length > 0 ? (
+                        pendingReports.map((report) => (
+                           <div
+                             key={report.type}
+                             className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                           >
+                             <div>
+                               <p className="font-medium text-sm">{report.type}</p>
+                             </div>
+                              <Badge variant={report.urgent > 0 ? "destructive" : "secondary"}>{report.count} pending</Badge>
+                           </div>
+                        ))
+                    ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">Tidak ada laporan yang tertunda.</p>
+                    )
+                 )}
+               </CardContent>
+             </Card>
+        </div>
       </div>
     </div>
   );
 }
+
