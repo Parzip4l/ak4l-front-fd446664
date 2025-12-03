@@ -20,9 +20,12 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
-const AUTH_ME_URL = "http://127.0.0.1:8000/api/v1/me";
-const STORAGE_BASE_URL = "http://127.0.0.1:8000/storage";
+const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage";
+
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
+const AUTH_ME_URL = `${API_BASE_URL}/me`;
+const STORAGE_BASE_URL = `${STORAGE_URL}/storage`;
 
 // --- API SERVICE ---
 const apiService = {

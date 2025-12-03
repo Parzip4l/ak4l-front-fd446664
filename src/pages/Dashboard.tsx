@@ -88,7 +88,7 @@ export default function Dashboard() {
       }
       setIsLoading(true);
       
-      const baseUrl = "http://127.0.0.1:8000";
+      const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -96,15 +96,15 @@ export default function Dashboard() {
       try {
         const [safetyRes, competencyRes, pendingReportsRes] = await Promise.all([
            fetch(
-            `${baseUrl}/api/v1/latest-by-month?year=${year}&month=${month}`,
+            `${baseUrl}/latest-by-month?year=${year}&month=${month}`,
             { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
           ),
           fetch(
-            `${baseUrl}/api/v1/personnels/analytics`,
+            `${baseUrl}/personnels/analytics`,
             { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
           ),
           fetch(
-            `${baseUrl}/api/v1/reports/pending`,
+            `${baseUrl}/reports/pending`,
             { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } }
           )
         ]);

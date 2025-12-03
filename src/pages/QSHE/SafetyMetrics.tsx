@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // URL API diambil dari environment variable
-const API_URL = "http://127.0.0.1:8000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 export default function SafetyMetrics() {
   const [safetyData, setSafetyData] = useState(null);

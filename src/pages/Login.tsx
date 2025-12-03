@@ -75,7 +75,7 @@ export default function Login() {
         <Card className="surface-3 border-0">
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center">
-              Masuk ke Sistem
+              LOGIN PAGE
             </CardTitle>
             <CardDescription className="text-center">
               Masukkan email dan password untuk mengakses dashboard

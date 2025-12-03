@@ -25,7 +25,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
-const API_URL = "http://127.0.0.1:8000/api/v1/safety-metrics";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
+
+const API_URL = `${API_BASE_URL}/safety-metrics`;
 const ITEMS_PER_PAGE = 5;
 
 /**

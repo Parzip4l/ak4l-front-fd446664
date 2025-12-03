@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Toaster } from "@/components/ui/toaster";
 
-const API_URL = "http://127.0.0.1:8000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 const incidentCategories = [
   { key: 'kasus_kriminal', name: 'Kasus Kriminal', description: 'Tindak pidana dalam area kerja' },
