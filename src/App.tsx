@@ -27,6 +27,11 @@ import CompetencyMonitoring from "./pages/Security/CompetencyMonitoring";
 import VisitorManagement from "./pages/Security/VisitorManagement";
 import VMSAdmin from "./pages/Security/VMSAdmin";
 
+// Apar Hydrant 
+import AparHydrantDashboard from "./pages/AparHydrant/AparDashboardPage";
+import AparReportPage from "./pages/AparHydrant/AparSchedulePage";
+import AparHydrantListPage from "./pages/AparHydrant/AparListPage";
+import AdminPage from "./pages/AparHydrant/AparAdminPage";
 // Reports
 import Reports from "./pages/Reports";
 
@@ -127,6 +132,34 @@ const App = () => (
               <ProtectedRoute adminOnly>
                 <TopNavigation />
                 <VMSAdmin />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/apar-hydrant/dashboard" element={
+              <ProtectedRoute>
+                <TopNavigation />
+                <AparHydrantDashboard />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/apar-hydrant/list" element={
+              <ProtectedRoute>
+                <TopNavigation />
+                <AparHydrantListPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/apar-hydrant/schedule" element={
+              <ProtectedRoute>
+                <TopNavigation />
+                <AparReportPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/apar-hydrant/admin" element={
+              <ProtectedRoute>
+                <TopNavigation />
+                <AdminPage />
               </ProtectedRoute>
             } />
 

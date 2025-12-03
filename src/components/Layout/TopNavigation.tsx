@@ -1,4 +1,4 @@
-// TopNavigation.js (Anggap path import sudah benar)
+
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   Bell,
   User,
   ChevronDown,
+  FireExtinguisher,
 } from "lucide-react";
 import PropTypes from "prop-types";
 
@@ -90,6 +91,18 @@ export function TopNavigation({ children }) {
         { title: "Visitor Management", href: "/security/vms", admin: false },
         // Hanya tampilkan jika isAdmin
         ...(isAdmin ? [{ title: "VMS Admin", href: "/security/vms-admin", admin: true }] : []), 
+      ],
+    },
+    {
+      title: "APAR & Hydrant",
+      icon: FireExtinguisher,
+      description: "Manajemen APAR dan sistem hydrant",
+      submenu: [
+        { title: "Dashboard APAR & Hydrant", href: "/apar-hydrant/dashboard", admin: false },
+        { title: "Daftar Alat", href: "/apar-hydrant/list", admin: false },
+        { title: "Jadwal & Kedaluwarsa", href: "/apar-hydrant/schedule", admin: false },
+        // Hanya tampilkan jika isAdmin
+        ...(isAdmin ? [{ title: "Admin Alat", href: "/apar-hydrant/admin", admin: true }] : []),
       ],
     },
     {

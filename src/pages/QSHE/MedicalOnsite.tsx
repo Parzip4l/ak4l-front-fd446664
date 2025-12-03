@@ -33,7 +33,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1/medical-reports-onsite";
 const AUTH_ME_URL = "http://127.0.0.1:8000/api/v1/me";
-const STORAGE_BASE_URL = "http://127.0.0.1:8000/storage"; // Assuming Laravel's public storage link
+const STORAGE_BASE_URL = "http://127.0.0.1:8000/storage";
 const ITEMS_PER_PAGE = 5;
 
 // API service to handle network requests
