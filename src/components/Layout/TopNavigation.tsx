@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,10 +16,10 @@ import {
 } from "lucide-react";
 import PropTypes from "prop-types";
 
-// Pastikan import ini sesuai dengan lokasi file AuthContext Anda
+// Import Auth Context
 import { useAuth } from "@/contexts/AuthContext";
 
-export function TopNavigation({ children }: { children: React.ReactNode }) {
+export function TopNavigation({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -31,25 +30,29 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
-  // --- LOGIC PERMISSION CHECKER (FIXED) ---
-  const checkAccess = useCallback((requiredPermission: string | null) => {
+  // --- LOGIC PERMISSION CHECKER ---
+  // Fungsi ini menentukan apakah user boleh melihat menu tertentu
+  const checkAccess = useCallback((requiredPermission) => {
+    // 1. Jika menu tidak butuh permission khusus (public for auth user), return true
     if (!requiredPermission) return true;
+
+    // 2. Safety check jika user belum load
     if (!user) return false;
 
-    // FIX: Casting ke any[] agar tidak error 'never'
-    const userRoles = (user.roles || []) as any[];
-    
-    const isSuperAdmin = userRoles.some((r: any) => {
+    // 3. Cek apakah user adalah "Super Admin" (Bypass semua permission)
+    // Asumsi: user.roles adalah array of objects {name: '...'} atau array of strings
+    const userRoles = user.roles || [];
+    const isSuperAdmin = userRoles.some(r => {
         const roleName = typeof r === 'string' ? r : r.name;
         return roleName === 'super-admin';
     });
 
     if (isSuperAdmin) return true;
 
-    // FIX: Casting ke any[] agar tidak error 'never'
-    const userPermissions = (user.permissions || []) as any[];
-    
-    const permissionNames = userPermissions.map((p: any) => typeof p === 'string' ? p : p.name);
+    // 4. Cek Permission Spesifik
+    // Kita pastikan format permission user distandarisasi menjadi array string
+    const userPermissions = user.permissions || []; 
+    const permissionNames = userPermissions.map(p => typeof p === 'string' ? p : p.name);
 
     return permissionNames.includes(requiredPermission);
   }, [user]);
@@ -70,9 +73,8 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
 
   // Close profile menu on outside click
   useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (profileMenuOpen && !target.closest('.profile-dropdown-container')) {
+    const handleOutsideClick = (event) => {
+      if (profileMenuOpen && !event.target.closest('.profile-dropdown-container')) {
         setProfileMenuOpen(false);
       }
     };
@@ -81,13 +83,14 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
   }, [profileMenuOpen]);
 
   // --- NAVIGATION CONFIGURATION ---
+  // PENTING: Sesuaikan 'permission' dengan nama permission yang ada di database Laravel Anda.
   const navigationItems = [
     {
       title: "Dashboard",
       href: "/dashboard",
       icon: Home,
       description: "Overview dan ringkasan data",
-      permission: null, 
+      permission: null, // Semua user login bisa akses
     },
     {
       title: "QSHE",
@@ -102,7 +105,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
         { 
             title: "Safety Admin", 
             href: "/qshe/safety-admin", 
-            permission: "safety_metrics.create" 
+            permission: "safety_metrics.create" // Hanya yg bisa create/manage
         }, 
         { 
             title: "Laporan Rikes & NAPZA", 
@@ -149,7 +152,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
         { 
             title: "VMS Admin", 
             href: "/security/vms-admin", 
-            permission: "visitor_requests.approve" 
+            permission: "visitor_requests.approve" // Khusus approver
         }, 
       ],
     },
@@ -192,37 +195,43 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
       href: "/user-management",
       icon: User,
       description: "User Management System",
-      permission: "users.manage" 
+      permission: "users.manage" // Atau bisa gunakan 'roles.view'
     },
   ];
   
   // --- FILTERING LOGIC ---
   const filteredNavigationItems = navigationItems.map(item => {
+    // 1. Cek permission Parent
+    // Jika parent butuh permission, cek dulu. Jika parent null permission, dianggap lolos.
     const hasParentAccess = checkAccess(item.permission);
 
+    // 2. Jika punya submenu, filter submenu-nya
     if (item.submenu) {
       const visibleSubmenu = item.submenu.filter(subItem => checkAccess(subItem.permission));
       
+      // Jika setelah difilter submenu kosong, dan parent tidak punya href sendiri (hanya wrapper), sembunyikan parent
       if (visibleSubmenu.length === 0 && !item.href) {
         return null;
       }
 
+      // Return item dengan submenu yang sudah difilter
       return {
         ...item,
         submenu: visibleSubmenu
       };
     }
 
+    // 3. Jika item biasa (bukan submenu), return berdasarkan akses parent
     return hasParentAccess ? item : null;
-  }).filter(Boolean);
+  }).filter(Boolean); // Hapus item yang null
 
 
-  // --- SUB-COMPONENT RENDER ---
-  const NavigationContent = ({ items, onLinkClick }: { items: any[], onLinkClick: () => void }) => (
+  // --- COMPONENT RENDER (Sub-component) ---
+  const NavigationContent = ({ items, onLinkClick }) => (
     <div className="flex flex-col lg:flex-row lg:items-center lg:space-x-2 space-y-2 lg:space-y-0">
       {items.map((item) => {
         const isParentActive =
-          item.submenu?.some((subItem: any) => location.pathname.startsWith(subItem.href)) ||
+          item.submenu?.some((subItem) => location.pathname.startsWith(subItem.href)) ||
           location.pathname === item.href;
 
         return (
@@ -247,12 +256,13 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
                   <span>{item.title}</span>
                 </Button>
 
+                {/* Dropdown submenu */}
                 <div className="absolute top-full left-0 mt-2 w-64 bg-white border rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg">
                   <div className="p-2">
                     <div className="text-sm font-medium text-gray-500 px-3 py-2">
                       {item.description}
                     </div>
-                    {item.submenu.map((subItem: any) => (
+                    {item.submenu.map((subItem) => (
                         <Link
                           key={subItem.href}
                           to={subItem.href}
@@ -315,8 +325,10 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {/* BACKGROUND GRADIENT */}
       <div className="absolute top-0 left-0 w-full h-[350px] bg-gradient-to-r from-orange-500 via-red-500 to-red-600 z-0" />
 
+      {/* NAVBAR */}
       <nav
         className={`sticky top-0 z-20 transition-colors duration-300 ${
           scrolled ? "bg-white shadow-md" : "bg-transparent"
@@ -324,6 +336,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
       >
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16 border-b border-white/20">
+            {/* Logo */}
             <div className="flex items-center space-x-3">
               <Link to="/" className="flex items-center">
                 <img
@@ -334,6 +347,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
 
+            {/* Desktop Navigation */}
             <div className="hidden lg:flex">
               <NavigationContent
                 items={filteredNavigationItems}
@@ -341,6 +355,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
               />
             </div>
 
+            {/* Right Section */}
             <div className="flex items-center space-x-4">
               <button
                 className={`${
@@ -375,8 +390,8 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
                         <p className="text-sm font-bold text-gray-900">{user?.name}</p>
                         <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                             {/* FIX: Casting roles ke any[] agar tidak error 'never' */}
-                             {(user?.roles as any[])?.slice(0, 2).map((role: any, idx: number) => (
+                             {/* Tampilkan Role Badge */}
+                             {user?.roles?.slice(0, 2).map((role, idx) => (
                                 <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                     {typeof role === 'string' ? role : role.name}
                                 </span>
@@ -438,6 +453,7 @@ export function TopNavigation({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
+      {/* MAIN CONTENT */}
       <main
         style={{
           position: "relative",
