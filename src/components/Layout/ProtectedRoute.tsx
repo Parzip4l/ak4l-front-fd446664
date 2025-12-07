@@ -1,58 +1,71 @@
-import { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Navigate, useLocation } from "react-router-dom";
 
-/**
- * Protected route component that handles authentication and authorization
- * Redirects to login if not authenticated, shows loading during auth check
- */
-
+// 1. Definisikan Interface agar TypeScript mengenali prop 'permission'
 interface ProtectedRouteProps {
-  children: ReactNode;
-  adminOnly?: boolean;
+  children: React.ReactNode;
+  permission?: string; // Tanda tanya (?) berarti opsional
 }
 
-export function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { user, isAdmin, isLoading } = useAuth();
+export const ProtectedRoute = ({ children, permission }: ProtectedRouteProps) => {
+  // Casting user ke any untuk menghindari error tipe data yang kompleks
+  const { user, loading } = useAuth() as any; 
   const location = useLocation();
 
-  // Show loading spinner during authentication check
-  if (isLoading) {
+  if (loading) {
+    // Tampilan loading sederhana saat cek auth
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-sm text-muted-foreground">Memuat...</p>
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </div>
     );
   }
 
-  // Redirect to login if not authenticated
+  // 1. Cek Authentication (Wajib Login)
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check admin permission for admin-only routes
-  if (adminOnly && !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center p-8">
-          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🚫</span>
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Akses Ditolak</h1>
-          <p className="text-muted-foreground mb-4">
-            Anda tidak memiliki izin untuk mengakses halaman ini.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Hubungi administrator untuk mendapatkan akses.
-          </p>
-        </div>
-      </div>
-    );
+  // 2. Cek Permission (Jika route butuh permission khusus)
+  if (permission) {
+    const userRoles = (user.roles || []) as any[];
+
+    // A. CEK SUPER ADMIN (Bypass Total)
+    // Logic yang sama persis dengan TopNavigation untuk konsistensi
+    const isSuperAdmin = userRoles.some((r: any) => {
+        const roleName = (typeof r === 'string' ? r : r.name) || '';
+        // Normalisasi string: hapus spasi, ganti _ dengan -, lowercase
+        const normalizedRole = roleName.toLowerCase().replace(/_/g, '-').replace(/\s+/g, '-');
+        // Izinkan 'super-admin' atau 'admin' mengakses semuanya
+        return normalizedRole === 'super-admin' || normalizedRole === 'admin';
+    });
+
+    // Jika bukan Super Admin, kita cek permission spesifiknya
+    if (!isSuperAdmin) {
+        let activePermissions: string[] = [];
+
+        // Ambil direct permissions
+        if (user.permissions && user.permissions.length > 0) {
+            activePermissions = user.permissions.map((p: any) => typeof p === 'string' ? p : p.name);
+        }
+
+        // Ambil permissions dari dalam Roles (Deep Merge)
+        userRoles.forEach((role: any) => {
+            if (role.permissions && Array.isArray(role.permissions)) {
+                const rolePerms = role.permissions.map((p: any) => typeof p === 'string' ? p : p.name);
+                activePermissions = [...activePermissions, ...rolePerms];
+            }
+        });
+
+        // Cek apakah permission yang diminta ada di daftar permission user
+        if (!activePermissions.includes(permission)) {
+            // User login TAPI tidak punya akses -> Lempar ke halaman Unauthorized
+            return <Navigate to="/unauthorized" replace />;
+        }
+    }
   }
 
+  // Jika lolos semua pengecekan, render halaman
   return <>{children}</>;
-}
+};

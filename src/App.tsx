@@ -7,11 +7,11 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TopNavigation } from "@/components/Layout/TopNavigation";
 import { ProtectedRoute } from "@/components/Layout/ProtectedRoute";
 
-
 // Pages
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import Unauthorized from "./pages/Unauthorized"; // Pastikan buat file ini (opsional)
 
 // QSHE Module Pages
 import SafetyMetrics from "./pages/QSHE/SafetyMetrics";
@@ -36,7 +36,6 @@ import AparReportPage from "./pages/AparHydrant/AparSchedulePage";
 import AparHydrantListPage from "./pages/AparHydrant/AparListPage";
 import AdminPage from "./pages/AparHydrant/AparAdminPage";
 
-
 // Reports
 import Reports from "./pages/Reports";
 
@@ -52,136 +51,155 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/unauthorized" element={<div className="p-10 text-center"><h1>403 - Unauthorized</h1></div>} />
             
             {/* Protected routes with navigation */}
             <Route path="/" element={
               <ProtectedRoute>
-                <TopNavigation />
-                <Dashboard />
+                <TopNavigation>
+                    <Dashboard />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/dashboard" element={
               <ProtectedRoute>
-                <TopNavigation />
-                <Dashboard />
+                <TopNavigation>
+                    <Dashboard />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             {/* QSHE Module Routes */}
             <Route path="/qshe/safety-metrics" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <SafetyMetrics />
+              <ProtectedRoute permission="safety_metrics.read">
+                <TopNavigation>
+                    <SafetyMetrics />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/qshe/safety-admin" element={
-              <ProtectedRoute adminOnly>
-                <TopNavigation />
-                <SafetyAdmin />
+              <ProtectedRoute permission="safety_metrics.create">
+                <TopNavigation>
+                    <SafetyAdmin />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/qshe/rikes-napza" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <RikesNapza />
+              <ProtectedRoute permission="medical_reports.read">
+                <TopNavigation>
+                    <RikesNapza />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/qshe/medical-onsite" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <MedicalOnsite />
+              <ProtectedRoute permission="medical_reports.read">
+                <TopNavigation>
+                    <MedicalOnsite />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             {/* Security Module Routes */}
             <Route path="/security/security-metrics" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <SecurityMetrics />
+              <ProtectedRoute permission="security_metrics.read">
+                <TopNavigation>
+                    <SecurityMetrics />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/security/security-admin" element={
-              <ProtectedRoute adminOnly>
-                <TopNavigation />
-                <SecurityAdmin />
+              <ProtectedRoute permission="security_metrics.create">
+                <TopNavigation>
+                    <SecurityAdmin />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/security/bujp-reports" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <BUJPReports />
+              <ProtectedRoute permission="security_metrics.read">
+                <TopNavigation>
+                    <BUJPReports />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/security/competency" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <CompetencyMonitoring />
+              <ProtectedRoute permission="security_metrics.read">
+                <TopNavigation>
+                    <CompetencyMonitoring />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/security/vms" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <VisitorManagement />
+              <ProtectedRoute permission="visitor_requests.read">
+                <TopNavigation>
+                    <VisitorManagement />
+                </TopNavigation>
               </ProtectedRoute>
             } />
             
             <Route path="/security/vms-admin" element={
-              <ProtectedRoute adminOnly>
-                <TopNavigation />
-                <VMSAdmin />
+              <ProtectedRoute permission="visitor_requests.approve">
+                <TopNavigation>
+                    <VMSAdmin />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             {/* Apar Management */}
             <Route path="/apar-hydrant/dashboard" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <AparHydrantDashboard />
+              <ProtectedRoute permission="safety_metrics.read">
+                <TopNavigation>
+                    <AparHydrantDashboard />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             <Route path="/apar-hydrant/list" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <AparHydrantListPage />
+              <ProtectedRoute permission="safety_metrics.read">
+                <TopNavigation>
+                    <AparHydrantListPage />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             <Route path="/apar-hydrant/schedule" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <AparReportPage />
+              <ProtectedRoute permission="safety_metrics.read">
+                <TopNavigation>
+                    <AparReportPage />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             <Route path="/apar-hydrant/admin" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <AdminPage />
+              <ProtectedRoute permission="safety_metrics.update">
+                <TopNavigation>
+                    <AdminPage />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             {/* User Management */}
             <Route path="/user-management" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <UserManagement />
+              <ProtectedRoute permission="users.manage">
+                <TopNavigation>
+                    <UserManagement />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
             {/* Reports */}
             <Route path="/reports" element={
-              <ProtectedRoute>
-                <TopNavigation />
-                <Reports />
+              <ProtectedRoute permission="reports.view_summary">
+                <TopNavigation>
+                    <Reports />
+                </TopNavigation>
               </ProtectedRoute>
             } />
 
