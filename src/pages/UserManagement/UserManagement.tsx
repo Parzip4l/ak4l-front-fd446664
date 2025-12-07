@@ -364,8 +364,8 @@ export default function UserRoleManagement() {
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">User & Role Management</h1>
-            <p className="text-gray-500 mt-2 text-lg">Kelola akses, keamanan, dan struktur organisasi.</p>
+            <h1 className="text-3xl font-extrabold text-white">User & Role Management</h1>
+            <p className="text-white mt-2 text-lg">Kelola akses, keamanan, dan struktur organisasi.</p>
           </div>
           <Button variant="outline" onClick={fetchData} disabled={isLoading} className="rounded-xl shadow-sm self-start sm:self-auto">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <RefreshCw className="h-4 w-4 mr-2"/>} Refresh
