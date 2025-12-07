@@ -36,7 +36,7 @@ const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage";
 
 const API_BASE_URL = `${API_URL}/bujp-reports`;
 const AUTH_ME_URL = `${API_URL}/me`;
-const STORAGE_BASE_URL = `${STORAGE_URL}/storage`;
+const STORAGE_BASE_URL = `${STORAGE_URL}`;
 const ITEMS_PER_PAGE = 5;
 
 // API service to handle network requests

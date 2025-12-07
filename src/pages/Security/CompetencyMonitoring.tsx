@@ -25,7 +25,7 @@ const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
 const AUTH_ME_URL = `${API_BASE_URL}/me`;
-const STORAGE_BASE_URL = `${STORAGE_URL}/storage`;
+const STORAGE_BASE_URL = `${STORAGE_URL}`;
 
 // --- API SERVICE ---
 const apiService = {
