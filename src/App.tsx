@@ -11,7 +11,7 @@ import { ProtectedRoute } from "@/components/Layout/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-import Unauthorized from "./pages/Unauthorized"; // Pastikan buat file ini (opsional)
+// import Unauthorized from "./pages/Unauthorized"; 
 
 // QSHE Module Pages
 import SafetyMetrics from "./pages/QSHE/SafetyMetrics";
