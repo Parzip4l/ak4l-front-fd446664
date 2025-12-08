@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/table";
 import { 
   CheckCircle, 
-  Clock,
   Plus,
   Eye,
   Loader2,
@@ -33,18 +32,20 @@ import {
   ThumbsDown,
   Download,
   FileIcon,
-  Filter
+  Filter,
+  ArrowUpDown, // Icon untuk sorting
+  ArrowUp,     // Icon sort asc
+  ArrowDown    // Icon sort desc
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 // --- KONFIGURASI ENV ---
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
-const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage";
+// const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage"; // Tidak dipakai lagi untuk download file privat
 const API_BASE_URL = `${API_URL}/bujp-reports`;
 const AUTH_ME_URL = `${API_URL}/me`;
-const STORAGE_BASE_URL = `${STORAGE_URL}`;
-const ITEMS_PER_PAGE = 10; // Tampilkan lebih banyak item jika menggunakan Table
+const ITEMS_PER_PAGE = 10; 
 
 // --- SERVICE API ---
 const apiService = {
@@ -107,8 +108,12 @@ export default function MedicalAdminPanel() {
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  
+  // Sorting State (BARU)
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'created_at', direction: 'desc' });
   
   // Dialog States
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -190,6 +195,119 @@ export default function MedicalAdminPanel() {
     setCurrentPage(1);
   };
 
+  // --- LOGIKA SORTING & SEARCHING (DIPERBAIKI) ---
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (columnKey: string) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />;
+    if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4 text-primary" />;
+    return <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
+  };
+
+  const processedReports = useMemo(() => {
+    let result = Array.isArray(reports) ? [...reports] : [];
+
+    // 1. Filtering (Search)
+    if (searchTerm) {
+        const lowercasedFilter = searchTerm.toLowerCase();
+        result = result.filter(report => {
+            const uploaderName = (report.submitter?.name || report.uploader?.name || '').toLowerCase();
+            const rType = formatReportType(report.type).toLowerCase();
+            const fName = (report.fileName || '').toLowerCase();
+
+            return (
+                uploaderName.includes(lowercasedFilter) ||
+                rType.includes(lowercasedFilter) ||
+                fName.includes(lowercasedFilter)
+            );
+        });
+    }
+
+    // 2. Sorting
+    if (sortConfig !== null) {
+        result.sort((a, b) => {
+            let aValue = a[sortConfig.key];
+            let bValue = b[sortConfig.key];
+
+            // Handle nested keys
+            if (sortConfig.key === 'submitter') {
+                aValue = a.submitter?.name || a.uploader?.name || '';
+                bValue = b.submitter?.name || b.uploader?.name || '';
+            }
+
+            // Handle strings case-insensitive
+            if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+            if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+    }
+
+    return result;
+  }, [reports, searchTerm, sortConfig]);
+
+  const paginatedReports = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return processedReports.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [processedReports, currentPage]);
+  
+  const totalPages = Math.ceil(processedReports.length / ITEMS_PER_PAGE);
+
+  // --- DOWNLOAD FUNCTION (Menggunakan Token) ---
+  const handleDownload = async (apiUrl: string, fileName: string) => {
+    try {
+        setIsDownloading(true);
+        const token = localStorage.getItem('token');
+
+        // Fetch ke API Controller, bukan file statis
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+            },
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) throw new Error("File tidak ditemukan di server.");
+            if (response.status === 403) throw new Error("Anda tidak memiliki izin download.");
+            throw new Error(`Gagal mengambil file (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+        console.error("Download error:", error);
+        toast({
+            title: "Gagal Download",
+            description: error.message || "Terjadi kesalahan saat mengunduh.",
+            variant: "destructive"
+        });
+    } finally {
+        setIsDownloading(false);
+    }
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !reportType || !reportMonth) {
@@ -208,7 +326,6 @@ export default function MedicalAdminPanel() {
         toast({ title: "Upload Berhasil", description: "Laporan baru telah ditambahkan dan menunggu approval." });
         setUploadFile(null); setReportType(""); setReportMonth(new Date().toISOString().substring(0, 7)); setReportNotes("");
         fetchReports(); 
-        // Optional: Switch tab to history automatically
     } catch (error) {
         console.error("Upload error:", error);
         toast({ title: "Upload Gagal", description: "Terjadi kesalahan saat mengupload file.", variant: "destructive" });
@@ -228,7 +345,6 @@ export default function MedicalAdminPanel() {
         toast({ title: "Status Berhasil Diupdate" });
         fetchReports(); 
         if (selectedReport && selectedReport.id === reportId) {
-             // Refresh detail view if open
              openDetailView(reportId);
         }
     } catch (error) {
@@ -275,31 +391,6 @@ export default function MedicalAdminPanel() {
       setUploadFile(file);
     }
   };
-  
-  const searchedReports = useMemo(() => {
-    if (!Array.isArray(reports)) return [];
-    if (!searchTerm) return reports;
-
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return reports.filter(report => {
-        const uploaderName = (report.submitter?.name || report.uploader?.name || '').toLowerCase();
-        const reportType = formatReportType(report.type).toLowerCase();
-        const fileName = (report.fileName || '').toLowerCase();
-
-        return (
-            uploaderName.includes(lowercasedFilter) ||
-            reportType.includes(lowercasedFilter) ||
-            fileName.includes(lowercasedFilter)
-        );
-    });
-  }, [reports, searchTerm]);
-
-  const paginatedReports = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return searchedReports.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [searchedReports, currentPage]);
-  
-  const totalPages = Math.ceil(searchedReports.length / ITEMS_PER_PAGE);
   
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -417,7 +508,6 @@ export default function MedicalAdminPanel() {
                     </div>
                 </div>
                 
-                {/* Filter Toolbar */}
                 <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
                     <div className="flex items-center gap-2">
                         <Filter className="h-4 w-4 text-muted-foreground" />
@@ -458,11 +548,37 @@ export default function MedicalAdminPanel() {
                         <TableHeader className="bg-muted/50">
                             <TableRow>
                                 <TableHead className="w-[50px]">No</TableHead>
-                                <TableHead>Tipe Laporan</TableHead>
-                                <TableHead>Periode</TableHead>
-                                <TableHead className="hidden md:table-cell">Pengunggah</TableHead>
-                                <TableHead className="hidden md:table-cell">Waktu Upload</TableHead>
-                                <TableHead>Status</TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('type')}>
+                                    <div className="flex items-center">
+                                        Tipe Laporan {getSortIcon('type')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('month')}>
+                                    <div className="flex items-center">
+                                        Periode {getSortIcon('month')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="hidden md:table-cell cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('submitter')}>
+                                    <div className="flex items-center">
+                                        Pengunggah {getSortIcon('submitter')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="hidden md:table-cell cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('created_at')}>
+                                    <div className="flex items-center">
+                                        Waktu Upload {getSortIcon('created_at')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('status')}>
+                                    <div className="flex items-center">
+                                        Status {getSortIcon('status')}
+                                    </div>
+                                </TableHead>
+                                
                                 <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -580,44 +696,82 @@ export default function MedicalAdminPanel() {
                      </div>
                 </div>
 
-                {selectedReport.approvals && selectedReport.approvals.length > 0 && (
-                  <div className="border-t pt-4">
-                    <h4 className="text-sm font-semibold mb-3">Riwayat Approval</h4>
-                    <div className="space-y-3">
-                        {selectedReport.approvals.map((approval: any) => (
-                          <div key={approval.id} className="flex gap-3 bg-gray-50 p-2 rounded-lg border">
-                            {approval.status === 'approved' 
-                                ? <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5"/> 
-                                : <X className="h-5 w-5 text-red-500 shrink-0 mt-0.5"/>
-                            }
+
+              {selectedReport.approvals && selectedReport.approvals.length > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3">Riwayat Approval</h4>
+                  <div className="space-y-3">
+                      {selectedReport.approvals.map((approval: any, index: number) => {
+                        const rawStatus = approval.status || approval.action || approval.type || 'unknown';
+                        
+                        const statusStr = String(rawStatus).toLowerCase();
+                        const isApproved = ['approved', 'setujui', 'accepted', 'acc'].includes(statusStr);
+                        const isRejected = ['rejected', 'tolak', 'declined'].includes(statusStr);
+                        return (
+                          <div key={approval.id || index} className="flex gap-3 bg-gray-50 p-2 rounded-lg border">
+                            {/* Icon Status */}
+                            {isApproved ? (
+                                <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5"/> 
+                            ) : isRejected ? (
+                                <X className="h-5 w-5 text-red-500 shrink-0 mt-0.5"/>
+                            ) : (
+                                // Icon default jika status unknown/pending
+                                <div className="h-5 w-5 rounded-full border-2 border-gray-300 shrink-0 mt-0.5" />
+                            )}
+
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start">
-                                    <p className={`text-sm font-semibold ${approval.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>
-                                        {/* PERBAIKAN ERROR DI SINI */}
-                                        {(approval.status || 'unknown').toUpperCase()}
+                                    {/* Label Status */}
+                                    <p className={`text-sm font-semibold ${
+                                        isApproved ? 'text-green-700' : 
+                                        isRejected ? 'text-red-700' : 'text-gray-600'
+                                    }`}>
+                                        {statusStr === 'unknown' ? 'MENUNGGU / UNKNOWN' : statusStr.toUpperCase()}
                                     </p>
-                                    <span className="text-xs text-muted-foreground">{formatDate(approval.created_at)}</span>
+                                    
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatDate(approval.created_at)}
+                                    </span>
                                 </div>
-                                <p className="text-xs text-gray-600 mt-1">Oleh: <span className="font-medium">{approval.approver?.name || 'Admin'}</span></p>
-                                {approval.notes && <p className="text-xs text-gray-500 mt-1 italic">"{approval.notes}"</p>}
+                                
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Oleh: <span className="font-medium">{approval.approver?.name || approval.user?.name || 'Admin'}</span>
+                                </p>
+                                
+                                {approval.notes && (
+                                  <p className="text-xs text-gray-500 mt-1 italic border-l-2 border-gray-300 pl-2">
+                                    "{approval.notes}"
+                                  </p>
+                                )}
                             </div>
                           </div>
-                        ))}
-                    </div>
+                        );
+                      })}
                   </div>
-                )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex justify-center items-center h-40"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
           )}
+          
           <DialogFooter className="sm:justify-between gap-2 border-t pt-4 mt-2">
             <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
             {selectedReport && (
-                <Button asChild>
-                    <a href={`${STORAGE_BASE_URL}/${selectedReport.file_path}`} target="_blank" rel="noopener noreferrer" download>
+                <Button 
+                    onClick={() => handleDownload(
+                        // PERBAIKAN: Menggunakan API endpoint, bukan URL storage langsung
+                        `${API_BASE_URL}/${selectedReport.id}/download`, 
+                        selectedReport.fileName || `laporan-${selectedReport.type}.pdf`
+                    )}
+                    disabled={isDownloading}
+                >
+                    {isDownloading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
                         <Download className="mr-2 h-4 w-4" />
-                        Download PDF
-                    </a>
+                    )}
+                    {isDownloading ? 'Mengunduh...' : 'Download PDF'}
                 </Button>
             )}
           </DialogFooter>

@@ -10,11 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { 
   CheckCircle, 
-  AlertCircle,
-  Clock,
   Plus,
-  User,
   Eye,
   Loader2,
   Search,
@@ -25,24 +30,25 @@ import {
   FileText,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare,
-  Download
+  Download,
+  FileIcon,
+  Filter,
+  ArrowUpDown, 
+  ArrowUp,    
+  ArrowDown    
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
-
+// --- KONFIGURASI ENV ---
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
-const STORAGE_URL = import.meta.env.VITE_STORAGE_URL || "/storage";
-
-const API_BASE_URL = `${API_URL}/medical-reports-onsite`;
+const API_BASE_URL = `${API_URL}/medical-reports-onsite`; // Endpoint Medical
 const AUTH_ME_URL = `${API_URL}/me`;
-const STORAGE_BASE_URL = `${STORAGE_URL}`;
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10; 
 
-// API service to handle network requests
+// --- SERVICE API ---
 const apiService = {
-  get: async (url) => {
+  get: async (url: string) => {
     const token = localStorage.getItem('token');
     const response = await fetch(url, {
       headers: {
@@ -53,9 +59,9 @@ const apiService = {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return response.json();
   },
-  post: async (url, body, isFormData = false) => {
+  post: async (url: string, body: any, isFormData = false) => {
     const token = localStorage.getItem('token');
-    const headers = {
+    const headers: any = {
       "Authorization": `Bearer ${token}`,
       "Accept": "application/json",
     };
@@ -72,38 +78,48 @@ const apiService = {
   }
 };
 
-const formatReportType = (type) => {
+// --- HELPERS ---
+const formatReportType = (type: string) => {
   if (!type) return 'N/A';
   return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
+const formatDate = (dateString: string) => {
+  if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('id-ID', {
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   });
 };
 
+const formatMonth = (dateString: string) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+}
+
 export default function MedicalAdminPanel() {
   const { toast } = useToast();
   
   // Data and State
-  const [reports, setReports] = useState([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [userPermissions, setUserPermissions] = useState([]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'created_at', direction: 'desc' });
   
   // Dialog States
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [confirmationAction, setConfirmationAction] = useState({ action: null, reportId: null, notes: '' });
+  const [confirmationAction, setConfirmationAction] = useState({ action: null as string | null, reportId: null as string | null, notes: '' });
   
-  // Filtering, Search, and Pagination
+  // Filtering
   const [filters, setFilters] = useState({
       month: '',
       year: new Date().getFullYear().toString(),
@@ -113,12 +129,11 @@ export default function MedicalAdminPanel() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Form State
-  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [reportType, setReportType] = useState("");
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().substring(0, 7));
   const [reportNotes, setReportNotes] = useState("");
 
-  // Set user permissions on component mount
   useEffect(() => {
     const fetchUserPermissions = async () => {
       try {
@@ -133,12 +148,10 @@ export default function MedicalAdminPanel() {
     fetchUserPermissions();
   }, []);
 
-  // Fetch data when filters change
   useEffect(() => {
     fetchReports();
   }, [filters]);
 
-  // Fetch data based on filters
   const fetchReports = async () => {
     setIsLoading(true);
     try {
@@ -153,7 +166,7 @@ export default function MedicalAdminPanel() {
       }
       
       const data = await apiService.get(url);
-      const transformedData = (Array.isArray(data) ? data : []).map(report => ({
+      const transformedData = (Array.isArray(data) ? data : []).map((report: any) => ({
         ...report,
         fileName: report.file_path ? report.file_path.split('/').pop() : 'N/A'
       }));
@@ -165,23 +178,133 @@ export default function MedicalAdminPanel() {
         description: "Tidak dapat mengambil data laporan dari server.",
         variant: "destructive",
       });
-      setReports([]); // Reset to empty array on error
+      setReports([]);
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleFilterChange = (field, value) => {
+  const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({...prev, [field]: value}));
-    setCurrentPage(1); // Reset pagination on filter change
+    setCurrentPage(1);
   };
   
-  const handleSearchChange = (event) => {
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
-    setCurrentPage(1); // Reset pagination on search
+    setCurrentPage(1);
   };
 
-  const handleUploadSubmit = async (e) => {
+  // --- LOGIKA SORTING & SEARCHING ---
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (columnKey: string) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />;
+    if (sortConfig.direction === 'asc') return <ArrowUp className="ml-2 h-4 w-4 text-primary" />;
+    return <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
+  };
+
+  const processedReports = useMemo(() => {
+    let result = Array.isArray(reports) ? [...reports] : [];
+
+    // 1. Filtering (Search)
+    if (searchTerm) {
+        const lowercasedFilter = searchTerm.toLowerCase();
+        result = result.filter(report => {
+            const uploaderName = (report.submitter?.name || report.uploader?.name || '').toLowerCase();
+            const rType = formatReportType(report.type).toLowerCase();
+            const fName = (report.fileName || '').toLowerCase();
+
+            return (
+                uploaderName.includes(lowercasedFilter) ||
+                rType.includes(lowercasedFilter) ||
+                fName.includes(lowercasedFilter)
+            );
+        });
+    }
+
+    // 2. Sorting
+    if (sortConfig !== null) {
+        result.sort((a, b) => {
+            let aValue = a[sortConfig.key];
+            let bValue = b[sortConfig.key];
+
+            if (sortConfig.key === 'submitter') {
+                aValue = a.submitter?.name || a.uploader?.name || '';
+                bValue = b.submitter?.name || b.uploader?.name || '';
+            }
+
+            if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+            if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+    }
+
+    return result;
+  }, [reports, searchTerm, sortConfig]);
+
+  const paginatedReports = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return processedReports.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [processedReports, currentPage]);
+  
+  const totalPages = Math.ceil(processedReports.length / ITEMS_PER_PAGE);
+
+  // --- DOWNLOAD FUNCTION (Secure) ---
+  const handleDownload = async (apiUrl: string, fileName: string) => {
+    try {
+        setIsDownloading(true);
+        const token = localStorage.getItem('token');
+
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+            },
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) throw new Error("File tidak ditemukan di server.");
+            if (response.status === 403) throw new Error("Anda tidak memiliki izin download.");
+            throw new Error(`Gagal mengambil file (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+        console.error("Download error:", error);
+        toast({
+            title: "Gagal Download",
+            description: error.message || "Terjadi kesalahan saat mengunduh.",
+            variant: "destructive"
+        });
+    } finally {
+        setIsDownloading(false);
+    }
+  };
+
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !reportType || !reportMonth) {
         toast({ title: "Data Tidak Lengkap", description: "Tipe, bulan, dan file wajib diisi.", variant: "destructive" });
@@ -217,6 +340,9 @@ export default function MedicalAdminPanel() {
         await apiService.post(url, { status: action, notes });
         toast({ title: "Status Berhasil Diupdate" });
         fetchReports(); 
+        if (selectedReport && selectedReport.id === reportId) {
+             openDetailView(reportId);
+        }
     } catch (error) {
         console.error("Status update error:", error);
         toast({ title: "Update Gagal", description: "Terjadi kesalahan saat mengubah status laporan.", variant: "destructive" });
@@ -227,12 +353,12 @@ export default function MedicalAdminPanel() {
     }
   };
   
-  const openConfirmation = (action, reportId) => {
+  const openConfirmation = (action: string, reportId: string) => {
     setConfirmationAction({ action, reportId, notes: '' });
     setIsConfirmOpen(true);
   };
   
-  const openDetailView = async (reportId) => {
+  const openDetailView = async (reportId: string) => {
       try {
         const reportDetails = await apiService.get(`${API_BASE_URL}/${reportId}`);
         const transformedDetails = {
@@ -247,7 +373,7 @@ export default function MedicalAdminPanel() {
       }
   };
   
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.type !== "application/pdf") {
@@ -262,40 +388,18 @@ export default function MedicalAdminPanel() {
     }
   };
   
-  const searchedReports = useMemo(() => {
-    if (!Array.isArray(reports)) return [];
-    if (!searchTerm) return reports;
-
-    const lowercasedFilter = searchTerm.toLowerCase();
-    return reports.filter(report => {
-        const uploaderName = (report.submitter?.name || report.uploader?.name || '').toLowerCase();
-        const reportType = formatReportType(report.type).toLowerCase();
-        const fileName = (report.fileName || '').toLowerCase();
-
-        return (
-            uploaderName.includes(lowercasedFilter) ||
-            reportType.includes(lowercasedFilter) ||
-            fileName.includes(lowercasedFilter)
-        );
-    });
-  }, [reports, searchTerm]);
-
-  const paginatedReports = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return searchedReports.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [searchedReports, currentPage]);
-  
-  const totalPages = Math.ceil(searchedReports.length / ITEMS_PER_PAGE);
-  
-  const getStatusProps = (status) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'approved': return { icon: <CheckCircle className="h-5 w-5 text-green-600" />, badge: <Badge className="bg-green-100 text-green-800 border-green-200">Approved</Badge>, color: 'text-green-600' };
-      case 'rejected': return { icon: <X className="h-5 w-5 text-red-600" />, badge: <Badge variant="destructive">Rejected</Badge>, color: 'text-red-600' };
-      default: return { icon: <Clock className="h-5 w-5 text-yellow-600" />, badge: <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>, color: 'text-yellow-600' };
+      case 'approved': 
+        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
+      case 'rejected': 
+        return <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Rejected</Badge>;
+      default: 
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-yellow-200">Pending</Badge>;
     }
   };
 
-  const years = Array.from({length: 10}, (_, i) => (new Date().getFullYear() - i).toString());
+  const years = Array.from({length: 5}, (_, i) => (new Date().getFullYear() - i).toString());
   const months = [
       { value: '1', label: 'Januari' }, { value: '2', label: 'Februari' }, { value: '3', label: 'Maret' },
       { value: '4', label: 'April' }, { value: '5', label: 'Mei' }, { value: '6', label: 'Juni' },
@@ -306,24 +410,29 @@ export default function MedicalAdminPanel() {
   const canApprove = userPermissions.includes('medical_reports.create');
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8 relative">
-      <h1 className="text-3xl font-bold text-white">Medical Report Admin Panel</h1>
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl text-white font-bold tracking-tight">Medical Report Admin Panel</h1>
+            <p className="text-white">Kelola laporan medis onsite dan monitoring kesehatan.</p>
+          </div>
+      </div>
       
-      <Tabs defaultValue="history">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="upload"><Plus className="h-4 w-4 mr-2"/>Upload Laporan</TabsTrigger>
-          <TabsTrigger value="history"><FileText className="h-4 w-4 mr-2"/>Riwayat & Approval</TabsTrigger>
+      <Tabs defaultValue="history" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="history"><FileText className="h-4 w-4 mr-2"/>Riwayat Data</TabsTrigger>
+          <TabsTrigger value="upload"><Plus className="h-4 w-4 mr-2"/>Upload Baru</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upload" className="mt-6">
-          <Card>
+        <TabsContent value="upload" className="space-y-4">
+          <Card className="max-w-2xl">
             <CardHeader>
-              <CardTitle>Upload Laporan Baru</CardTitle>
-              <CardDescription>Isi detail laporan dan upload file PDF (maks 2MB).</CardDescription>
+              <CardTitle>Upload Laporan Medis</CardTitle>
+              <CardDescription>File laporan akan masuk status pending sampai disetujui.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleUploadSubmit} className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="type">Tipe Laporan</Label>
                     <Select value={reportType} onValueChange={setReportType} required>
@@ -338,142 +447,309 @@ export default function MedicalAdminPanel() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="month">Periode Bulan</Label>
-                    <Input id="month" type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} required/>
+                    <Input id="month" type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} required className="block w-full"/>
                   </div>
                 </div>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="file-upload">File Laporan</Label>
-                  <Input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} required/>
-                  {uploadFile && <p className="text-sm text-muted-foreground">File: {uploadFile.name}</p>}
+                    <Label htmlFor="file-upload">File Dokumen (PDF)</Label>
+                    <div className="flex items-center justify-center w-full">
+                        <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <UploadCloud className="w-8 h-8 mb-2 text-gray-500" />
+                                <p className="text-sm text-gray-500"><span className="font-semibold">Klik untuk upload</span> atau drag and drop</p>
+                                <p className="text-xs text-gray-500">PDF (Maks. 2MB)</p>
+                            </div>
+                            <Input id="file-upload" type="file" className="hidden" accept=".pdf" onChange={handleFileChange} required/>
+                        </label>
+                    </div>
+                    {uploadFile && (
+                        <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded mt-2">
+                            <FileIcon className="h-4 w-4" />
+                            {uploadFile.name}
+                        </div>
+                    )}
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Catatan (Opsional)</Label>
-                  <Textarea id="notes" placeholder="Deskripsi singkat..." value={reportNotes} onChange={(e) => setReportNotes(e.target.value)} />
+                  <Label htmlFor="notes">Catatan Tambahan</Label>
+                  <Textarea id="notes" placeholder="Tuliskan keterangan jika diperlukan..." value={reportNotes} onChange={(e) => setReportNotes(e.target.value)} className="resize-none" />
                 </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                  {isSubmitting ? 'Mengunggah...' : 'Upload Laporan'}
-                </Button>
+                
+                <div className="flex justify-end">
+                    <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                    Upload Laporan
+                    </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="history" className="mt-6">
+        <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                  <div>
-                    <CardTitle>Riwayat Laporan</CardTitle>
-                    <CardDescription>Review, setujui, atau tolak laporan yang masuk.</CardDescription>
-                  </div>
-                  <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input type="search" placeholder="Cari file, tipe, atau uploader..." className="pl-8 sm:w-[300px]" value={searchTerm} onChange={handleSearchChange}/>
-                  </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-                <div className="flex flex-col md:flex-row gap-4 p-4 mb-4 border rounded-lg bg-gray-50">
-                    <div className="flex-1 space-y-2"><Label>Tahun</Label><Select value={filters.year} onValueChange={(v) => handleFilterChange('year', v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="flex-1 space-y-2"><Label>Bulan</Label><Select value={filters.month} onValueChange={(v) => handleFilterChange('month', v)}><SelectTrigger><SelectValue placeholder="Semua Bulan"/></SelectTrigger><SelectContent>{months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="flex-1 space-y-2"><Label>Status</Label><Select value={filters.status} onValueChange={(v) => handleFilterChange('status', v)}><SelectTrigger><SelectValue placeholder="Semua Status"/></SelectTrigger><SelectContent><SelectItem value="submitted">Pending</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem></SelectContent></Select></div>
-                </div>
-
-              {isLoading ? <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div> : 
-              paginatedReports.length > 0 ? (
-                <div className="space-y-4">
-                  {paginatedReports.map((report) => {
-                    const status = getStatusProps(report.status);
-                    return (
-                    <Card key={report.id} className="overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col sm:flex-row sm:justify-between">
-                          <div className="flex items-start space-x-4">
-                            <div className="mt-1">{status.icon}</div>
-                            <div>
-                              <p className="font-semibold text-gray-800">{report.type || 'N/A'}</p>
-                              <div className="text-sm text-muted-foreground space-y-1 mt-1">
-                                <p><strong>Tipe:</strong> {formatReportType(report.type)}</p>
-                                <p><strong>Periode:</strong> {new Date(report.month).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</p>
-                                <p><strong>Uploader:</strong> {report.submitter?.name || report.uploader?.name || 'N/A'}</p>
-                                <p><strong>Diupload pada:</strong> {formatDate(report.created_at)}</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2 mt-4 sm:mt-0 self-start">
-                             {status.badge}
-                             <Button size="icon" variant="outline" onClick={() => openDetailView(report.id)}><Eye className="h-4 w-4"/></Button>
-                             {canApprove && report.status === 'submitted' && (
-                              <>
-                                 <Button size="icon" className="bg-green-600 hover:bg-green-700" onClick={() => openConfirmation('approved', report.id)}><ThumbsUp className="h-4 w-4"/></Button>
-                                 <Button size="icon" variant="destructive" onClick={() => openConfirmation('rejected', report.id)}><ThumbsDown className="h-4 w-4"/></Button>
-                              </>
-                             )}
-                          </div>
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <div>
+                        <CardTitle>Data Laporan</CardTitle>
+                        <CardDescription>Daftar seluruh laporan yang masuk ke sistem.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input type="search" placeholder="Cari laporan..." className="pl-8 w-[200px] md:w-[300px]" value={searchTerm} onChange={handleSearchChange}/>
                         </div>
-                      </CardContent>
-                    </Card>
-                  )})}
+                    </div>
                 </div>
-              ) : <p className="text-center text-muted-foreground py-8">Tidak ada data yang cocok dengan filter atau pencarian.</p>}
-              
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center space-x-2 mt-6">
-                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                  <span className="text-sm">Halaman {currentPage} dari {totalPages}</span>
-                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Filter:</span>
+                    </div>
+                    <Select value={filters.year} onValueChange={(v) => handleFilterChange('year', v)}>
+                        <SelectTrigger className="w-[100px] h-8"><SelectValue/></SelectTrigger>
+                        <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={filters.month} onValueChange={(v) => handleFilterChange('month', v)}>
+                        <SelectTrigger className="w-[130px] h-8"><SelectValue placeholder="Bulan"/></SelectTrigger>
+                        <SelectContent>{months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={filters.status} onValueChange={(v) => handleFilterChange('status', v)}>
+                        <SelectTrigger className="w-[130px] h-8"><SelectValue placeholder="Status"/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Status</SelectItem>
+                            <SelectItem value="submitted">Pending</SelectItem>
+                            <SelectItem value="approved">Approved</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {(filters.month || filters.status) && (
+                        <Button variant="ghost" size="sm" onClick={() => setFilters({year: new Date().getFullYear().toString(), month: '', status: ''})} className="h-8 px-2 lg:px-3">
+                            Reset
+                        </Button>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                  <div className="flex justify-center items-center h-64">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+                  </div>
+              ) : paginatedReports.length > 0 ? (
+                <div className="relative w-full overflow-auto">
+                    <Table>
+                        <TableHeader className="bg-muted/50">
+                            <TableRow>
+                                <TableHead className="w-[50px]">No</TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('type')}>
+                                    <div className="flex items-center">
+                                        Tipe Laporan {getSortIcon('type')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('month')}>
+                                    <div className="flex items-center">
+                                        Periode {getSortIcon('month')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="hidden md:table-cell cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('submitter')}>
+                                    <div className="flex items-center">
+                                        Pengunggah {getSortIcon('submitter')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="hidden md:table-cell cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('created_at')}>
+                                    <div className="flex items-center">
+                                        Waktu Upload {getSortIcon('created_at')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => requestSort('status')}>
+                                    <div className="flex items-center">
+                                        Status {getSortIcon('status')}
+                                    </div>
+                                </TableHead>
+                                
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginatedReports.map((report, index) => (
+                                <TableRow key={report.id} className="hover:bg-muted/50">
+                                    <TableCell className="text-muted-foreground">
+                                        {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">{formatReportType(report.type)}</span>
+                                            <span className="text-xs text-muted-foreground md:hidden">{report.submitter?.name}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {formatMonth(report.month)}
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                                                {report.submitter?.name?.charAt(0) || 'U'}
+                                            </div>
+                                            <span className="text-sm">{report.submitter?.name || report.uploader?.name || '-'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                                        {formatDate(report.created_at)}
+                                    </TableCell>
+                                    <TableCell>
+                                        {getStatusBadge(report.status)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDetailView(report.id)}>
+                                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                            </Button>
+                                            
+                                            {canApprove && report.status === 'submitted' && (
+                                                <>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-green-600 hover:bg-green-50" onClick={() => openConfirmation('approved', report.id)}>
+                                                        <ThumbsUp className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-red-600 hover:bg-red-50" onClick={() => openConfirmation('rejected', report.id)}>
+                                                        <ThumbsDown className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                    <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900">Tidak ada laporan ditemukan</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mt-2">
+                        Cobalah ubah filter pencarian atau upload laporan baru jika belum ada data.
+                    </p>
                 </div>
               )}
             </CardContent>
+            {totalPages > 1 && (
+                <div className="flex items-center justify-end space-x-2 p-4 border-t">
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}>
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                    </Button>
+                    <span className="text-sm font-medium px-2">
+                        Hal {currentPage} / {totalPages}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}>
+                        Next <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                </div>
+            )}
           </Card>
         </TabsContent>
       </Tabs>
 
       {/* Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Detail Laporan</DialogTitle>
+            <DialogDescription>Informasi lengkap mengenai laporan yang dipilih.</DialogDescription>
           </DialogHeader>
           {selectedReport ? (
-            <>
-              <div className="space-y-3 py-4 text-sm">
-                <p><strong>File:</strong> {selectedReport.fileName || 'N/A'}</p>
-                <p><strong>Uploader:</strong> {selectedReport.submitter?.name || selectedReport.uploader?.name || 'N/A'}</p>
-                <p><strong>Bulan:</strong> {new Date(selectedReport.month).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</p>
-                <p><strong>Tipe:</strong> {formatReportType(selectedReport.type)}</p>
-                <p><strong>Status:</strong> <span className={getStatusProps(selectedReport.status).color}>{selectedReport.status}</span></p>
-                <p><strong>Catatan Laporan:</strong> {selectedReport.notes || '-'}</p>
-                {selectedReport.approvals?.length > 0 && (
-                  <div className="pt-4 mt-4 border-t">
-                    <h4 className="font-semibold text-gray-800 mb-3">Riwayat Approval</h4>
-                     <div className="space-y-4">
-                        {selectedReport.approvals.map(approval => (
-                          <div key={approval.id} className="flex items-start space-x-3">
-                            {approval.status === 'approved' ? <CheckCircle className="h-5 w-5 text-green-500 mt-px"/> : <X className="h-5 w-5 text-red-500 mt-px"/>}
-                            <div className="flex-1">
-                              <p className={`font-semibold ${approval.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>{approval.status.toUpperCase()}</p>
-                              <p className="text-sm text-gray-600">Oleh: <span className="font-medium">{approval.approver?.name || 'N/A'}</span></p>
-                              {approval.notes && <p className="text-sm text-gray-500 mt-1 bg-gray-50 p-2 rounded-md italic">"{approval.notes}"</p>}
-                              <p className="text-xs text-gray-400 mt-1">{formatDate(approval.created_at)}</p>
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground text-xs font-medium uppercase">Tipe Laporan</p>
+                        <p className="font-medium">{formatReportType(selectedReport.type)}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground text-xs font-medium uppercase">Periode</p>
+                        <p className="font-medium">{formatMonth(selectedReport.month)}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground text-xs font-medium uppercase">Status</p>
+                        <div>{getStatusBadge(selectedReport.status)}</div>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-muted-foreground text-xs font-medium uppercase">Pengunggah</p>
+                        <p>{selectedReport.submitter?.name || selectedReport.uploader?.name || '-'}</p>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                     <p className="text-muted-foreground text-xs font-medium uppercase">Catatan Laporan</p>
+                     <div className="bg-muted/50 p-3 rounded-md text-sm">
+                        {selectedReport.notes || <span className="text-muted-foreground italic">Tidak ada catatan</span>}
+                     </div>
+                </div>
+
+                {selectedReport.approvals && selectedReport.approvals.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-semibold mb-3">Riwayat Approval</h4>
+                    <div className="space-y-3">
+                        {selectedReport.approvals.map((approval: any, index: number) => {
+                           const rawStatus = approval.status || approval.action || approval.type || 'unknown';
+                           const statusStr = String(rawStatus).toLowerCase();
+                           const isApproved = ['approved', 'setujui', 'accepted', 'acc'].includes(statusStr);
+                           const isRejected = ['rejected', 'tolak', 'declined'].includes(statusStr);
+
+                          return (
+                            <div key={approval.id || index} className="flex gap-3 bg-gray-50 p-2 rounded-lg border">
+                                {isApproved ? (
+                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5"/> 
+                                ) : isRejected ? (
+                                    <X className="h-5 w-5 text-red-500 shrink-0 mt-0.5"/>
+                                ) : (
+                                    <div className="h-5 w-5 rounded-full border-2 border-gray-300 shrink-0 mt-0.5" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-start">
+                                        <p className={`text-sm font-semibold ${isApproved ? 'text-green-700' : isRejected ? 'text-red-700' : 'text-gray-600'}`}>
+                                            {statusStr === 'unknown' ? 'MENUNGGU / UNKNOWN' : statusStr.toUpperCase()}
+                                        </p>
+                                        <span className="text-xs text-muted-foreground">{formatDate(approval.created_at)}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mt-1">Oleh: <span className="font-medium">{approval.approver?.name || approval.user?.name || 'Admin'}</span></p>
+                                    {approval.notes && <p className="text-xs text-gray-500 mt-1 italic">"{approval.notes}"</p>}
+                                </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
-              </div>
-              <DialogFooter>
-                <Button asChild variant="outline">
-                  <a href={`${STORAGE_BASE_URL}/${selectedReport.file_path}`} target="_blank" rel="noopener noreferrer" download={selectedReport.fileName}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download File
-                  </a>
+            </div>
+          ) : (
+            <div className="flex justify-center items-center h-40"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
+          )}
+          
+          <DialogFooter className="sm:justify-between gap-2 border-t pt-4 mt-2">
+            <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
+            {selectedReport && (
+                <Button 
+                    onClick={() => handleDownload(
+                        `${API_BASE_URL}/${selectedReport.id}/download`, 
+                        selectedReport.fileName || `medical-report-${selectedReport.type}.pdf`
+                    )}
+                    disabled={isDownloading}
+                >
+                    {isDownloading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                    )}
+                    {isDownloading ? 'Mengunduh...' : 'Download PDF'}
                 </Button>
-              </DialogFooter>
-            </>
-          ) : <div className="flex justify-center items-center h-40"><Loader2 className="mx-auto h-8 w-8 animate-spin"/></div>}
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       
@@ -483,14 +759,16 @@ export default function MedicalAdminPanel() {
           <DialogHeader>
             <DialogTitle>Konfirmasi Tindakan</DialogTitle>
             <DialogDescription>
-                Anda akan {confirmationAction.action === 'approved' ? 'menyetujui' : 'menolak'} laporan ini. Mohon berikan catatan (wajib jika menolak).
+                Apakah Anda yakin ingin <span className={confirmationAction.action === 'approved' ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                    {confirmationAction.action === 'approved' ? 'MENYETUJUI' : 'MENOLAK'}
+                </span> laporan ini?
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="approval_notes">Catatan</Label>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="approval_notes">Catatan Approval (Wajib jika menolak)</Label>
             <Textarea 
               id="approval_notes" 
-              placeholder="Tambahkan catatan untuk tindakan ini..." 
+              placeholder="Berikan alasan atau keterangan..." 
               value={confirmationAction.notes}
               onChange={(e) => setConfirmationAction(prev => ({ ...prev, notes: e.target.value }))}
             />
@@ -503,7 +781,7 @@ export default function MedicalAdminPanel() {
                 className={confirmationAction.action === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
             >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Konfirmasi
+                {confirmationAction.action === 'approved' ? 'Setujui' : 'Tolak'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -511,4 +789,3 @@ export default function MedicalAdminPanel() {
     </div>
   );
 }
-
